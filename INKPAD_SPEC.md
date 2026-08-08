@@ -1,8 +1,8 @@
-# Markpad — V1 Product & Technical Specification
+# InkPad — V1 Product & Technical Specification
 
 ## 1. Project Definition
 
-Markpad is a lightweight Windows-first desktop text-document application whose first-class document type is Markdown.
+InkPad is a lightweight Windows-first desktop text-document application whose first-class document type is Markdown.
 
 Its purpose is simple:
 
@@ -22,7 +22,7 @@ This document is the single source of truth for V1.
 
 1. Do not redesign the product or invent alternative UI patterns.
 2. Do not add features that are not specified here.
-3. Do not turn Markpad into an IDE.
+3. Do not turn InkPad into an IDE.
 4. Prefer the smallest reasonable implementation.
 5. Do not add dependencies when the existing stack or platform APIs can reasonably handle the requirement.
 6. Do not create abstractions for hypothetical future features.
@@ -95,7 +95,7 @@ The main application window has two primary regions:
 ┌──────────────────────────────────────────────────────────────┐
 │ SIDEBAR       │ TOOLBAR                                     │
 │               │                                              │
-│ MARKPAD       │ [sidebar]  filename.md       Reading Edit ⋯ │
+│ InkPad       │ [sidebar]  filename.md       Reading Edit ⋯ │
 │               │                                              │
 │ RECENT        ├──────────────────────────────────────────────┤
 │               │                                              │
@@ -140,7 +140,7 @@ The application should feel:
 - desktop-native
 - developer-friendly without looking like an IDE
 
-Visual references are the general restraint of applications such as Linear, Bear, Craft, Arc, and high-quality documentation readers, but Markpad must have its own identity.
+Visual references are the general restraint of applications such as Linear, Bear, Craft, Arc, and high-quality documentation readers, but InkPad must have its own identity.
 
 Avoid:
 
@@ -213,7 +213,7 @@ Do not make headings unnecessarily huge.
 
 V1 should have:
 
-- Markpad Charcoal (default)
+- InkPad Charcoal (default)
 - Light theme
 
 Additional themes are a post-V1 feature.
@@ -269,7 +269,7 @@ Width: approximately 230px.
 Structure:
 
 ```text
-MARKPAD
+InkPad
 
 RECENT
 
@@ -338,7 +338,7 @@ Do not create a VS Code-style activity bar.
 
 # 10. Reader Mode
 
-Reader mode is the primary Markpad experience.
+Reader mode is the primary InkPad experience.
 
 The document should be centered with a comfortable maximum reading width.
 
@@ -356,11 +356,11 @@ Example:
 ```text
                   # Building a Lightweight Desktop App
 
-                  Markpad is a small, fast reader...
+                  InkPad is a small, fast reader...
 
-                  ## Why Markpad?
+                  ## Why InkPad?
 
-                  Markpad is designed for people...
+                  InkPad is designed for people...
 
                   ## Features
 
@@ -488,9 +488,9 @@ Example:
 ```text
 1  # Building a Lightweight Desktop App
 2
-3  Markpad is a small, fast reader...
+3  InkPad is a small, fast reader...
 4
-5  ## Why Markpad?
+5  ## Why InkPad?
 ```
 
 Rules:
@@ -508,7 +508,7 @@ Rules:
 - No autocomplete system in V1.
 - No LSP.
 - No terminal.
-- No file explorer beyond the Markpad recent-files sidebar.
+- No file explorer beyond the InkPad recent-files sidebar.
 - No VS Code activity bar.
 - No unnecessary editor chrome.
 
@@ -560,7 +560,7 @@ The document remains centered and readable.
 When no document is open:
 
 ```text
-                    Markpad
+                    InkPad
 
            Your Markdown, without
           the development environment.
@@ -723,7 +723,7 @@ Do not create a large settings application.
 
 # 22. Generic Document Model
 
-Markpad is a lightweight text-document application whose first-class document type is Markdown.
+InkPad is a lightweight text-document application whose first-class document type is Markdown.
 
 The core document model must not assume every document is Markdown.
 
@@ -912,11 +912,11 @@ The goal is to minimize the possibility of destroying a document because of a cr
 
 # 27. External File Modification
 
-Markpad may be used alongside VS Code, OpenCode, Git, terminal editors, etc.
+InkPad may be used alongside VS Code, OpenCode, Git, terminal editors, etc.
 
 Therefore detect when an open document has changed externally.
 
-If the document has NOT been modified inside Markpad:
+If the document has NOT been modified inside InkPad:
 
 - reload the external version automatically or offer a quiet reload.
 
@@ -927,7 +927,7 @@ Do not silently overwrite either version.
 Show a simple prompt:
 
 ```text
-README.md was modified outside Markpad.
+README.md was modified outside InkPad.
 
 [ Reload File ]    [ Keep My Changes ]
 ```
@@ -1111,7 +1111,7 @@ These may be considered in the future, but they are explicitly outside V1.
 
 # 33. Performance Requirements
 
-Markpad is a lightweight desktop utility, not an IDE.
+InkPad is a lightweight desktop utility, not an IDE.
 
 Avoid:
 
@@ -1288,7 +1288,7 @@ Fix bugs before adding optional features.
 
 V1 is complete when a user can:
 
-1. Double-click a `.md` file and open it in Markpad.
+1. Double-click a `.md` file and open it in InkPad.
 2. Read the Markdown in a polished, comfortable layout.
 3. Switch to Edit mode.
 4. Make changes.
@@ -1299,7 +1299,7 @@ V1 is complete when a user can:
 9. Search the document.
 10. Navigate through the document outline.
 11. Open another Markdown or TXT file.
-12. Drag a file into Markpad.
+12. Drag a file into InkPad.
 13. Find recent files after restarting the application.
 14. Use the command palette.
 15. Enter distraction-free mode.
@@ -1312,9 +1312,9 @@ V1 is complete when a user can:
 
 Whenever a proposed feature or implementation decision is considered, ask:
 
-> Does this make Markpad better at being a lightweight Markdown/text notebook, or does it make Markpad more like an IDE?
+> Does this make InkPad better at being a lightweight Markdown/text notebook, or does it make InkPad more like an IDE?
 
-If it makes Markpad more like an IDE, it is probably not needed.
+If it makes InkPad more like an IDE, it is probably not needed.
 
 The core product remains:
 
