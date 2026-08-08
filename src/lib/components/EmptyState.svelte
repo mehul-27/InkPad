@@ -1,6 +1,5 @@
 <script lang="ts">
-  // ponytail: drag-and-drop and Open File are Phase 2; the empty state
-  // is visual-only for now.
+  import { openDocument } from "../actions";
 </script>
 
 <section class="empty-state">
@@ -12,7 +11,7 @@
 
   <p class="drop-hint">Drop a file here</p>
   <p class="or">or</p>
-  <button class="open-btn" type="button">Open File</button>
+  <button class="open-btn" type="button" onclick={openDocument}>Open File</button>
 </section>
 
 <style>

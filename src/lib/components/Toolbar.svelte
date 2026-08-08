@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { mode, sidebarOpen, theme } from "../stores";
+  import { mode, sidebarOpen, theme, doc, saveState } from "../stores";
+  import { saveDocument, saveDocumentAs, closeDocument, revealDocument } from "../actions";
 
   let menuOpen = $state(false);
 
@@ -21,17 +22,18 @@
         ><path d="M2 3.5h12M2 8h12M2 12.5h12"/></svg
       >
     </button>
-    <!-- ponytail: filename shown once Phase 2 provides a document -->
-    <span class="filename" class:has-doc={false}></span>
+    <span class="filename">{ $doc ? $doc.filename : "" }</span>
   </div>
 
   <div class="right">
-    <div class="save-state"></div>
+    <div class="save-state">{ $doc ? ($saveState === "saved" ? "Saved" : "Unsaved") : "" }</div>
 
     <div class="mode-switch" role="group" aria-label="View mode">
       <button
         type="button"
         class:active={$mode === "reading"}
+        disabled={$doc?.language !== "markdown"}
+        title={$doc?.language !== "markdown" ? "Plain text has no reading view" : undefined}
         onclick={() => setMode("reading")}
       >Reading</button>
       <button
@@ -60,6 +62,13 @@
         onclick={() => (menuOpen = false)}
       ></button>
       <div class="menu" role="menu">
+        {#if $doc}
+          <div class="menu-label">File</div>
+          <button type="button" role="menuitem" onclick={() => { saveDocument(); menuOpen = false; }}>Save</button>
+          <button type="button" role="menuitem" onclick={() => { saveDocumentAs(); menuOpen = false; }}>Save As...</button>
+          <button type="button" role="menuitem" onclick={() => { revealDocument(); menuOpen = false; }}>Reveal in Explorer</button>
+          <button type="button" role="menuitem" onclick={() => { closeDocument(); menuOpen = false; }}>Close</button>
+        {/if}
         <div class="menu-label">Theme</div>
         <button
           type="button"
@@ -148,6 +157,11 @@
     background: var(--surface-raised);
     color: var(--foreground);
     font-weight: 500;
+  }
+
+  .mode-switch button:disabled {
+    opacity: 0.45;
+    cursor: default;
   }
 
   .menu-backdrop {

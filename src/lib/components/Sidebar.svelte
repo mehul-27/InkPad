@@ -1,15 +1,26 @@
 <script lang="ts">
-  import { sidebarOpen } from "../stores";
+  import { sidebarOpen, recentFiles, doc } from "../stores";
+  import { openDocument, openPath } from "../actions";
 </script>
 
 <aside class="sidebar" class:hidden={!$sidebarOpen}>
   <div class="wordmark">InkPad</div>
 
   <div class="section-label">Recent</div>
-  <!-- ponytail: recent list is populated in Phase 2 (file operations) -->
+  <div class="recent-list">
+    {#each $recentFiles as path}
+      <button
+        class="recent-item"
+        class:active={$doc?.path === path}
+        type="button"
+        title={path}
+        onclick={() => openPath(path)}
+      >{path.split(/[\\/]/).pop()}</button>
+    {/each}
+  </div>
 
   <div class="footer">
-    <button class="footer-item" type="button">
+    <button class="footer-item" type="button" onclick={openDocument}>
       <span class="footer-icon" aria-hidden="true"
         ><svg viewBox="0 0 16 16" width="14" height="14" fill="none"
           stroke="currentColor" stroke-width="1.5"><path d="M8 3v10M3 8h10"/></svg
@@ -59,6 +70,46 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--muted-foreground);
+  }
+
+  .recent-list {
+    display: flex;
+    flex-direction: column;
+    padding: 0 10px;
+  }
+
+  .recent-item {
+    position: relative;
+    padding: 6px 8px 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--muted-foreground);
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .recent-item:hover {
+    background: var(--surface-raised);
+    color: var(--foreground);
+  }
+
+  .recent-item.active {
+    background: var(--surface-raised);
+    color: var(--foreground);
+    font-weight: 500;
+  }
+
+  .recent-item.active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 5px;
+    bottom: 5px;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--accent);
   }
 
   .footer {
