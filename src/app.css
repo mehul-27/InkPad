@@ -1,0 +1,156 @@
+/* ============================================================
+   InkPad — semantic design tokens
+   Every color is a token. Components never hardcode colors.
+   Themes are selected via the `data-theme` attribute on <html>.
+   ============================================================ */
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Surfaces — cool charcoal, no pure black */
+  --background: #101114;
+  --surface: #16171b;
+  --surface-raised: #1b1d22;
+  --popover: #1f2127;
+
+  /* Text */
+  --foreground: #e9e6e0;
+  --muted-foreground: #9a9fa8;
+
+  /* Accent — restrained indigo */
+  --accent: #7b87f0;
+  --accent-foreground: #14151c;
+  --accent-soft: rgba(123, 135, 240, 0.14);
+
+  /* Borders — extremely subtle */
+  --border: #26282f;
+  --border-strong: #33363f;
+  --hairline: #1e2026;
+
+  /* Prose */
+  --prose: #d8d5cf;
+  --prose-heading: #f0ede7;
+
+  /* Code */
+  --code: #d6d3cc;
+  --code-background: #191b20;
+
+  /* Syntax (restrained, desaturated) */
+  --syntax-keyword: #8f9bf0;
+  --syntax-string: #9cc4a0;
+  --syntax-number: #d9a06b;
+  --syntax-comment: #6b7078;
+  --syntax-function: #b48edb;
+
+  /* Status */
+  --success: #7fb389;
+  --warning: #d3a05f;
+  --error: #d47a7a;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  /* Surfaces — warm paper, not a dark-theme inversion */
+  --background: #f7f4ee;
+  --surface: #efece4;
+  --surface-raised: #e9e5db;
+  --popover: #ffffff;
+
+  /* Text */
+  --foreground: #26231d;
+  --muted-foreground: #77726a;
+
+  /* Accent — deeper indigo for contrast on light */
+  --accent: #5a66c9;
+  --accent-foreground: #ffffff;
+  --accent-soft: rgba(90, 102, 201, 0.12);
+
+  /* Borders */
+  --border: #ddd8cd;
+  --border-strong: #c9c3b5;
+  --hairline: #e6e2d8;
+
+  /* Prose */
+  --prose: #3a352d;
+  --prose-heading: #201c16;
+
+  /* Code */
+  --code: #403b33;
+  --code-background: #efece2;
+
+  /* Syntax */
+  --syntax-keyword: #5a66c9;
+  --syntax-string: #5f8f63;
+  --syntax-number: #a5682e;
+  --syntax-comment: #8a857c;
+  --syntax-function: #7a5aa8;
+
+  /* Status */
+  --success: #4e7d57;
+  --warning: #9a6a2f;
+  --error: #b0534c;
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: "IBM Plex Sans Variable", "IBM Plex Sans", -apple-system,
+    "Segoe UI", sans-serif;
+  font-size: 14px;
+  color: var(--foreground);
+  background: var(--background);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+#app {
+  height: 100%;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
