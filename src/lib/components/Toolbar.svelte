@@ -1,11 +1,23 @@
 <script lang="ts">
+  import { get } from "svelte/store";
   import { mode, sidebarOpen, theme, doc, saveState } from "../stores";
   import { saveDocument, saveDocumentAs, closeDocument, revealDocument } from "../actions";
 
   let menuOpen = $state(false);
+  let toast = $state<string | null>(null);
+  let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
   function setMode(next: "reading" | "edit") {
     mode.set(next);
+  }
+
+  async function copyMarkdown() {
+    const current = get(doc);
+    if (!current) return;
+    await navigator.clipboard.writeText(current.content);
+    toast = "Copied";
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => (toast = null), 1500);
   }
 </script>
 
@@ -54,16 +66,19 @@
       >
     </button>
 
-    {#if menuOpen}
-      <button
-        class="menu-backdrop"
-        type="button"
-        aria-label="Close menu"
-        onclick={() => (menuOpen = false)}
-      ></button>
+  {#if menuOpen}
+    <button
+      class="menu-backdrop"
+      type="button"
+      aria-label="Close menu"
+      onclick={() => (menuOpen = false)}
+    ></button>
       <div class="menu" role="menu">
         {#if $doc}
           <div class="menu-label">File</div>
+          {#if $doc.language === "markdown"}
+            <button type="button" role="menuitem" onclick={() => { copyMarkdown(); menuOpen = false; }}>Copy Markdown</button>
+          {/if}
           <button type="button" role="menuitem" onclick={() => { saveDocument(); menuOpen = false; }}>Save</button>
           <button type="button" role="menuitem" onclick={() => { saveDocumentAs(); menuOpen = false; }}>Save As...</button>
           <button type="button" role="menuitem" onclick={() => { revealDocument(); menuOpen = false; }}>Reveal in Explorer</button>
@@ -83,6 +98,10 @@
           onclick={() => { theme.set("light"); menuOpen = false; }}
         >Light</button>
       </div>
+    {/if}
+
+    {#if toast}
+      <div class="toast" role="status">{toast}</div>
     {/if}
   </div>
 </header>
@@ -210,5 +229,32 @@
     content: "✓";
     float: right;
     color: var(--accent);
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 60;
+    padding: 7px 14px;
+    border-radius: 7px;
+    background: var(--popover);
+    border: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--foreground);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    animation: toast-in 0.12s ease;
+  }
+
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
   }
 </style>

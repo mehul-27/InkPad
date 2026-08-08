@@ -94,6 +94,50 @@ fn reveal_in_explorer(path: String) {
         .spawn();
 }
 
+// ---- Phase 3: local image loading for the Markdown Reader ----
+
+/// Cap on decoded image bytes; larger files are skipped (quiet placeholder).
+const MAX_IMAGE_BYTES: u64 = 8 * 1024 * 1024;
+
+#[derive(serde::Serialize)]
+struct ImageData {
+    mime: String,
+    data: String,
+}
+
+fn mime_for(path: &str) -> &'static str {
+    let ext = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "bmp" => "image/bmp",
+        "ico" => "image/x-icon",
+        "avif" => "image/avif",
+        _ => "application/octet-stream",
+    }
+}
+
+#[tauri::command]
+fn read_image_data(path: String) -> Option<ImageData> {
+    use base64::Engine;
+    let meta = fs::metadata(&path).ok()?;
+    if !meta.is_file() || meta.len() > MAX_IMAGE_BYTES {
+        return None;
+    }
+    let bytes = fs::read(&path).ok()?;
+    Some(ImageData {
+        mime: mime_for(&path).to_string(),
+        data: base64::engine::general_purpose::STANDARD.encode(bytes),
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -103,13 +147,15 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_startup_file,
             get_recent_files,
             add_recent_file,
             read_text_file,
             write_text_file,
-            reveal_in_explorer
+            reveal_in_explorer,
+            read_image_data
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

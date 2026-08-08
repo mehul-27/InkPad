@@ -1,10 +1,9 @@
 <script lang="ts">
   import { mode, doc, saveState } from "../stores";
-  import { saveDocument } from "../actions";
+  import Reader from "./Reader.svelte";
 
-  // ponytail: reading pane shows raw source until Phase 3 (markdown-it);
-  // editing is a plain textarea until Phase 4 (CodeMirror). Plain-text
-  // documents always use the editor (spec §23).
+  // ponytail: editing is a plain textarea until Phase 4 (CodeMirror).
+  // Plain-text documents always use the editor (spec §23).
 
   function onInput(event: Event) {
     const value = (event.target as HTMLTextAreaElement).value;
@@ -14,11 +13,7 @@
 </script>
 
 {#if $mode === "reading" && $doc?.language === "markdown"}
-  <div class="reading-pane">
-    <div class="reading-column">
-      <div class="raw-content">{ $doc.content }</div>
-    </div>
-  </div>
+  <Reader />
 {:else}
   <div class="editing-pane">
     <textarea
@@ -31,26 +26,6 @@
 {/if}
 
 <style>
-  .reading-pane {
-    height: 100%;
-    overflow-y: auto;
-    padding: 48px 32px;
-  }
-
-  .reading-column {
-    max-width: 820px;
-    margin: 0 auto;
-    min-height: calc(100% - 96px);
-  }
-
-  .raw-content {
-    font-size: 16px;
-    line-height: 1.75;
-    color: var(--prose);
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-
   .editing-pane {
     height: 100%;
     background: var(--code-background);

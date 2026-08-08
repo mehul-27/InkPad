@@ -32,6 +32,7 @@ This document is the single source of truth for V1.
 10. V1 must be functional before optional polish is added.
 11. Future file formats should be architecturally possible, but do not implement them merely for extensibility.
 12. Do not create unnecessary project files or documentation files. Keep the project structure small and understandable.
+Offline-first: InkPad must make no network requests during normal operation. V1 has no cloud functionality, telemetry, analytics, remote image loading, update checks, or external resource fetching.
 
 When something is ambiguous, choose the simplest implementation consistent with this specification. Do not redesign the product to resolve minor ambiguity.
 
@@ -1319,3 +1320,5 @@ If it makes InkPad more like an IDE, it is probably not needed.
 The core product remains:
 
 > Open Markdown. Read it beautifully. Edit it when necessary. Save it quietly. Get out of the way.
+
+

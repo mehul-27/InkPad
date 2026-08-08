@@ -22,6 +22,8 @@ export async function pickFileToSave(defaultPath?: string): Promise<string | nul
 export const readTextFile = (path: string) => invoke<string>("read_text_file", { path });
 export const writeTextFile = (path: string, content: string) =>
   invoke<void>("write_text_file", { path, content });
+export const readImageData = (path: string) =>
+  invoke<{ mime: string; data: string } | null>("read_image_data", { path });
 export const getRecentFiles = () => invoke<string[]>("get_recent_files");
 export const addRecentFile = (path: string) => invoke<void>("add_recent_file", { path });
 export const revealInExplorer = (path: string) => invoke<void>("reveal_in_explorer", { path });
