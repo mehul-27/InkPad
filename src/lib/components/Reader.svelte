@@ -1,13 +1,25 @@
 <script lang="ts">
   import { doc } from "../stores";
-  import { renderMarkdown } from "../markdown";
+  import { renderMarkdown, extractHeadings } from "../markdown";
   import { dirname, resolve } from "@tauri-apps/api/path";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { readImageData } from "../api";
+  import { settings } from "../settings";
+  import {
+    rememberReaderPosition,
+    takeReaderPosition,
+    readerAnchorFromScroll,
+    readerScrollFromAnchor,
+    type PositionAnchor,
+  } from "../position";
 
   // Phase 3: rendered Markdown reading pane. Rendering is pure — the doc
   // content is escaped as it renders (html: false), so no document HTML or
   // script ever reaches the DOM. Links are intercepted and handed to the OS.
+  // Phase 6: position preservation. The pane remembers a logical anchor
+  // (nearest heading's source line, or a normalized scroll fraction) when it
+  // unmounts, restores it when it remounts, and re-anchors on live re-render
+  // (split view typing, external reloads) instead of jumping to the top.
 
   const content = $derived($doc?.content ?? "");
   const rendered = $derived.by(() => {
@@ -18,8 +30,115 @@
     }
   });
   const isEmpty = $derived(content.trim() === "");
+  // Heading list from the renderer's own parser — order and slugs match the
+  // rendered DOM, so heading elements can be mapped to source lines.
+  const headings = $derived(
+    $doc?.language === "markdown" ? extractHeadings(content) : [],
+  );
 
+  let pane: HTMLDivElement | undefined;
   let column: HTMLDivElement | undefined;
+
+  function headingEls(): HTMLElement[] {
+    return Array.from(
+      pane?.querySelectorAll<HTMLElement>(
+        ".reading-column h1, .reading-column h2, .reading-column h3, .reading-column h4",
+      ) ?? [],
+    );
+  }
+
+  /// Content-space y of an element inside the scroller.
+  function contentY(el: HTMLElement): number {
+    const rect = pane!.getBoundingClientRect();
+    return el.getBoundingClientRect().top - rect.top + pane!.scrollTop;
+  }
+
+  function captureAnchor(): PositionAnchor | null {
+    if (!pane) return null;
+    const els = headingEls();
+    const maxScroll = pane.scrollHeight - pane.clientHeight;
+    return readerAnchorFromScroll(headings, maxScroll, pane.scrollTop, (i) => contentY(els[i]));
+  }
+
+  function applyAnchor(anchor: PositionAnchor | null): void {
+    if (!anchor || !pane) return;
+    const els = headingEls();
+    const maxScroll = pane.scrollHeight - pane.clientHeight;
+    pane.scrollTop = readerScrollFromAnchor(headings, anchor, maxScroll, (i) => contentY(els[i]));
+  }
+
+  // Named-anchor preservation across live re-renders (split view typing):
+  // the pre-effect captures which heading was near the top of the viewport
+  // (from the DOM about to be replaced), the post-effect re-scrolls so that
+  // same heading lands at the same visual offset. Headingless documents
+  // fall back to raw scrollTop.
+  let preserved: { slug: string | null; topDelta: number; scrollTop: number } | null = null;
+  let restored = false;
+  let lastPath: string | null = null;
+
+  // watch document switches: when the path changes the pane should restore
+  // that document's remembered anchor instead of preserving the old DOM's
+  $effect(() => {
+    const path = $doc?.path ?? null;
+    if (path !== lastPath) {
+      lastPath = path;
+      restored = false;
+    }
+  });
+
+  $effect.pre(() => {
+    rendered;
+    if (!pane || !$doc || !restored) return;
+    const els = headingEls();
+    const top = pane.scrollTop + 48;
+    let idx = -1;
+    for (let i = 0; i < els.length; i++) {
+      if (contentY(els[i]) <= top) idx = i;
+    }
+    preserved =
+      idx >= 0 && headings[idx]
+        ? { slug: headings[idx].slug, topDelta: pane.scrollTop - contentY(els[idx]), scrollTop: pane.scrollTop }
+        : { slug: null, topDelta: 0, scrollTop: pane.scrollTop };
+  });
+
+  $effect(() => {
+    rendered;
+    if (!pane || !$doc) return;
+    if (!restored) {
+      restored = true;
+      applyAnchor(takeReaderPosition($doc.path));
+      return;
+    }
+    if (preserved) {
+      if (preserved.slug) {
+        const el = pane.querySelector<HTMLElement>(`#${CSS.escape(preserved.slug)}`);
+        if (el) {
+          pane.scrollTop = contentY(el) + preserved.topDelta;
+        } else {
+          pane.scrollTop = Math.min(preserved.scrollTop, pane.scrollHeight - pane.clientHeight);
+        }
+      } else {
+        pane.scrollTop = Math.min(preserved.scrollTop, pane.scrollHeight - pane.clientHeight);
+      }
+      preserved = null;
+    }
+  });
+
+  // remember the logical position when this pane disappears (mode switch,
+  // split close, document switch, app teardown)
+  $effect(() => {
+    $doc;
+    const path = $doc?.path;
+    return () => {
+      if (!path) return;
+      try {
+        const anchor = captureAnchor();
+        if (anchor) rememberReaderPosition(path, anchor);
+      } catch {
+        // pane already torn down mid-capture; the next visit starts at top
+      }
+    };
+  });
 
   function decode(src: string): string {
     try {
@@ -141,7 +260,13 @@
   });
 </script>
 
-<div class="reading-pane">
+<div
+  class="reading-pane"
+  class:wide={$settings.contentWidth === "wide"}
+  class:font-small={$settings.readerFontSize === "small"}
+  class:font-large={$settings.readerFontSize === "large"}
+  bind:this={pane}
+>
   <div class="reading-column" bind:this={column}>
     {#if !rendered.ok}
       <p class="doc-message">Couldn't render this document: {rendered.error}</p>
@@ -158,6 +283,19 @@
     height: 100%;
     overflow-y: auto;
     padding: 48px 32px;
+  }
+
+  /* Phase 6: Settings — content width and reader font size */
+  .reading-pane.wide .reading-column {
+    max-width: 1000px;
+  }
+
+  .reading-pane.font-small .reading-column {
+    font-size: 15px;
+  }
+
+  .reading-pane.font-large .reading-column {
+    font-size: 17.5px;
   }
 
   .reading-column {

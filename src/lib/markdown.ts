@@ -37,14 +37,24 @@ function slugify(text: string): string {
     .replace(/^-|-$/g, "");
 }
 
-function headingText(
-  inline: { children?: { type: string; content: string }[] | null } | null,
-): string {
+interface InlineToken {
+  type: string;
+  content?: string;
+  children?: InlineToken[] | null;
+}
+
+// Plain text of a heading's inline content, recursing through emphasis /
+// strong / links. Used for both anchor slugs and the document outline, so
+// outline clicks always resolve to the same heading ids the renderer emits.
+function headingText(inline: { children?: InlineToken[] | null } | null): string {
   if (!inline?.children) return "";
-  return inline.children
-    .filter((t) => t.type === "text" || t.type === "code_inline")
-    .map((t) => t.content)
-    .join("");
+  let out = "";
+  for (const t of inline.children) {
+    if (t.type === "text" || t.type === "code_inline") out += t.content ?? "";
+    else if (t.type === "softbreak" || t.type === "hardbreak") out += " ";
+    else if (t.children?.length) out += headingText(t);
+  }
+  return out;
 }
 
 const defaultHeadingOpen = md.renderer.rules.heading_open;
@@ -93,4 +103,37 @@ md.renderer.rules.image = (tokens, idx) => {
 export function renderMarkdown(content: string): string {
   usedSlugs.clear();
   return md.render(content);
+}
+
+// ---- Document outline (spec §"Document Outline"): same parser, same slug
+// ---- logic as the renderer, so outline entries and heading ids stay in sync.
+
+export interface MarkdownHeading {
+  level: number;
+  text: string;
+  slug: string;
+  /** 0-based source line of the heading (token.map start) */
+  line: number;
+}
+
+export function extractHeadings(content: string): MarkdownHeading[] {
+  const used = new Map<string, number>();
+  const result: MarkdownHeading[] = [];
+  const tokens = md.parse(content, {});
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token.type !== "heading_open") continue;
+    const text = headingText(tokens[i + 1]);
+    let slug = slugify(text) || "heading";
+    const n = used.get(slug) ?? 0;
+    used.set(slug, n + 1);
+    if (n > 0) slug = `${slug}-${n}`;
+    result.push({
+      level: Number(token.tag[1]),
+      text,
+      slug,
+      line: token.map?.[0] ?? 0,
+    });
+  }
+  return result;
 }

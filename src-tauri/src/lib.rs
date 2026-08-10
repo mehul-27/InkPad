@@ -8,6 +8,23 @@ use tauri::{AppHandle, Emitter, Manager};
 
 const RECENT_LIMIT: usize = 10;
 
+/// Bundled welcome document, embedded at compile time. On the first launch
+/// it is extracted to the writable app-data directory (never the
+/// installation directory), shown in Reading mode, and deliberately kept
+/// out of the recent-files list.
+const WELCOME_CONTENT: &str = include_str!("../assets/Welcome.md");
+
+fn first_run_marker(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|dir| dir.join("onboarded"))
+}
+
+fn welcome_doc_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path().app_data_dir().ok().map(|dir| dir.join("Welcome.md"))
+}
+
 fn recent_path(app: &AppHandle) -> Option<PathBuf> {
     app.path()
         .app_config_dir()
@@ -55,6 +72,25 @@ fn get_startup_file() -> Option<String> {
     file_arg_from(&std::env::args().collect::<Vec<_>>())
 }
 
+/// First-ever launch: extract the bundled welcome document to the writable
+/// app-data directory and return its path. Every later launch returns None.
+#[tauri::command]
+fn get_welcome_file(app: AppHandle) -> Option<String> {
+    let marker = first_run_marker(&app)?;
+    if marker.exists() {
+        return None;
+    }
+    let welcome = welcome_doc_path(&app)?;
+    if let Some(dir) = welcome.parent() {
+        let _ = fs::create_dir_all(dir);
+    }
+    if fs::write(&welcome, WELCOME_CONTENT).is_err() {
+        return None;
+    }
+    let _ = fs::write(&marker, "");
+    Some(welcome.to_string_lossy().into_owned())
+}
+
 #[tauri::command]
 fn get_recent_files(app: AppHandle) -> Vec<String> {
     read_recent(&app)
@@ -80,9 +116,26 @@ fn read_text_file(path: String) -> Result<String, String> {
 
 #[tauri::command]
 fn write_text_file(path: String, content: String) -> Result<(), String> {
-    // ponytail: plain write for now; atomic (temp + rename) write lands in
-    // Phase 4 with autosave, per the spec's development order.
-    fs::write(&path, content).map_err(|e| format!("Could not save {path}: {e}"))
+    // Atomic write (spec §26): write a sibling temp file, then rename over
+    // the target. std::fs::rename replaces existing files on Windows
+    // (MOVEFILE_REPLACE_EXISTING), so the original is never truncated
+    // before the new contents are safely on disk.
+    let target = PathBuf::from(&path);
+    let dir = target
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."));
+    let file_name = target
+        .file_name()
+        .ok_or_else(|| format!("Could not save {path}: not a file path"))?;
+    let temp = dir.join(format!(".inkpad-{}.tmp", file_name.to_string_lossy()));
+    fs::write(&temp, &content).map_err(|e| format!("Could not save {path}: {e}"))?;
+    fs::rename(&temp, &target).map_err(|e| {
+        let _ = fs::remove_file(&temp);
+        format!("Could not save {path}: {e}")
+    })?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -150,6 +203,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_startup_file,
+            get_welcome_file,
             get_recent_files,
             add_recent_file,
             read_text_file,

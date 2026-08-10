@@ -46,6 +46,9 @@
   --success: #7fb389;
   --warning: #d3a05f;
   --error: #d47a7a;
+
+  /* Overlay dim behind the command palette / file switcher */
+  --overlay-dim: rgba(0, 0, 0, 0.28);
 }
 
 :root[data-theme="light"] {
@@ -90,6 +93,9 @@
   --success: #4e7d57;
   --warning: #9a6a2f;
   --error: #b0534c;
+
+  /* Overlay dim behind the command palette / file switcher */
+  --overlay-dim: rgba(0, 0, 0, 0.1);
 }
 
 /* ============================================================
@@ -127,6 +133,18 @@ button {
   border: none;
   padding: 0;
   cursor: pointer;
+  transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease;
+}
+
+/* accessible focus rings for the whole app — subtle, not neon */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* CodeMirror manages its own focus styling */
+.cm-editor:focus-visible {
+  outline: none;
 }
 
 #app {

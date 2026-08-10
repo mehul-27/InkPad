@@ -1,10 +1,13 @@
 <script lang="ts">
-  import { sidebarOpen, recentFiles, doc } from "../stores";
+  import { sidebarOpen, recentFiles, doc, overlay } from "../stores";
   import { openDocument, openPath } from "../actions";
 </script>
 
 <aside class="sidebar" class:hidden={!$sidebarOpen}>
-  <div class="wordmark">InkPad</div>
+  <div class="wordmark">
+    <img class="wordmark-img" src="/inkpad-mark.png" alt="" width="18" height="18" />
+    InkPad
+  </div>
 
   <div class="section-label">Recent</div>
   <div class="recent-list">
@@ -27,7 +30,7 @@
         ></span>
       Open File
     </button>
-    <button class="footer-item" type="button">
+    <button class="footer-item" type="button" onclick={() => overlay.set("settings")}>
       <span class="footer-icon" aria-hidden="true"
         ><svg viewBox="0 0 16 16" width="14" height="14" fill="none"
           stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.6"/><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.7 3.7l1.1 1.1M11.2 11.2l1.1 1.1M12.3 3.7l-1.1 1.1M4.8 11.2l-1.1 1.1"/></svg
@@ -56,11 +59,19 @@
   }
 
   .wordmark {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     padding: 16px 18px 14px;
     font-size: 15px;
     font-weight: 650;
     letter-spacing: 0.02em;
     color: var(--foreground);
+  }
+
+  .wordmark-img {
+    display: block;
+    flex-shrink: 0;
   }
 
   .section-label {

@@ -19,6 +19,8 @@ export interface Document {
   language: Language;
   dirty: boolean;
   capabilities: Capabilities;
+  /** Bundled welcome document: never autosaved, saves route to Save As. */
+  welcome: boolean;
 }
 
 const MARKDOWN_EXTENSIONS = new Set(["md", "markdown"]);
@@ -65,7 +67,7 @@ export function capabilitiesFor(language: Language): Capabilities {
   }
 }
 
-export function createDocument(path: string, content: string): Document {
+export function createDocument(path: string, content: string, welcome = false): Document {
   const language = languageFor(path) ?? "plaintext";
   return {
     path,
@@ -75,5 +77,6 @@ export function createDocument(path: string, content: string): Document {
     language,
     dirty: false,
     capabilities: capabilitiesFor(language),
+    welcome,
   };
 }

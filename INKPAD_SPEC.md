@@ -4,7 +4,7 @@
 
 InkPad is a lightweight Windows-first desktop text-document application whose first-class document type is Markdown.
 
-Its purpose is simple:
+Its purpose is 
 
 > Open Markdown quickly, read it beautifully, edit it when necessary, and stay out of the way.
 

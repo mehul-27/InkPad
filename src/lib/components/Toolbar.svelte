@@ -1,13 +1,19 @@
 <script lang="ts">
   import { get } from "svelte/store";
-  import { mode, sidebarOpen, theme, doc, saveState } from "../stores";
+  import { mode, sidebarOpen, theme, doc, saveState, overlay } from "../stores";
   import { saveDocument, saveDocumentAs, closeDocument, revealDocument } from "../actions";
 
   let menuOpen = $state(false);
   let toast = $state<string | null>(null);
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
-  function setMode(next: "reading" | "edit") {
+  // any overlay opening (palette, file switcher, outline) dismisses the menu
+  $effect(() => {
+    $overlay;
+    menuOpen = false;
+  });
+
+  function setMode(next: "reading" | "edit" | "split") {
     mode.set(next);
   }
 
@@ -38,7 +44,11 @@
   </div>
 
   <div class="right">
-    <div class="save-state">{ $doc ? ($saveState === "saved" ? "Saved" : "Unsaved") : "" }</div>
+    <div class="save-state">
+      {#if $doc}
+        {#if $saveState === "saving"}Saving...{:else if $saveState === "unsaved"}Unsaved{:else}Saved{/if}
+      {/if}
+    </div>
 
     <div class="mode-switch" role="group" aria-label="View mode">
       <button
@@ -53,6 +63,13 @@
         class:active={$mode === "edit"}
         onclick={() => setMode("edit")}
       >Edit</button>
+      <button
+        type="button"
+        class:active={$mode === "split"}
+        disabled={$doc?.language !== "markdown"}
+        title={$doc?.language !== "markdown" ? "Plain text has no split view" : "Split view"}
+        onclick={() => setMode("split")}
+      >Split</button>
     </div>
 
     <button
@@ -97,6 +114,12 @@
           class:selected={$theme === "light"}
           onclick={() => { theme.set("light"); menuOpen = false; }}
         >Light</button>
+        <button
+          type="button"
+          role="menuitem"
+          class:selected={$theme === "system"}
+          onclick={() => { theme.set("system"); menuOpen = false; }}
+        >System</button>
       </div>
     {/if}
 
@@ -200,6 +223,14 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    animation: menu-in 0.1s ease;
+  }
+
+  @keyframes menu-in {
+    from {
+      opacity: 0;
+      translate: 0 -4px;
+    }
   }
 
   .menu-label {

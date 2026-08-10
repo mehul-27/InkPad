@@ -3,6 +3,7 @@
 </script>
 
 <section class="empty-state">
+  <img class="logo" src="/inkpad-mark.png" alt="InkPad" width="44" height="44" />
   <h1 class="title">InkPad</h1>
   <p class="tagline">
     Your Markdown, without<br />
@@ -27,11 +28,16 @@
   }
 
   .title {
-    margin: 0 0 10px;
+    margin: 14px 0 10px;
     font-size: 28px;
     font-weight: 650;
     letter-spacing: 0.01em;
     color: var(--foreground);
+  }
+
+  .logo {
+    display: block;
+    opacity: 0.9;
   }
 
   .tagline {
