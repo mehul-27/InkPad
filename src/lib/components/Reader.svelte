@@ -1,25 +1,30 @@
 <script lang="ts">
   import { doc } from "../stores";
-  import { renderMarkdown, extractHeadings } from "../markdown";
+  import { renderMarkdown } from "../markdown";
   import { dirname, resolve } from "@tauri-apps/api/path";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { readImageData } from "../api";
   import { settings } from "../settings";
   import {
-    rememberReaderPosition,
-    takeReaderPosition,
-    readerAnchorFromScroll,
-    readerScrollFromAnchor,
+    rememberPosition,
+    takePosition,
+    anchorFromBlocks,
+    scrollFromAnchor,
+    VIEWPORT_ANCHOR_FRACTION,
     type PositionAnchor,
+    type BlockInfo,
   } from "../position";
 
   // Phase 3: rendered Markdown reading pane. Rendering is pure — the doc
   // content is escaped as it renders (html: false), so no document HTML or
   // script ever reaches the DOM. Links are intercepted and handed to the OS.
-  // Phase 6: position preservation. The pane remembers a logical anchor
-  // (nearest heading's source line, or a normalized scroll fraction) when it
-  // unmounts, restores it when it remounts, and re-anchors on live re-render
-  // (split view typing, external reloads) instead of jumping to the top.
+  // Phase 6: position preservation. Every rendered block carries a
+  // data-source-line attribute; the pane maps its viewport anchor (25% from
+  // the top) to a source line inside the block at that position, remembers
+  // it keyed by document path, and restores it by mapping the source line
+  // back to a rendered block. Positions are captured continuously while
+  // mounted (the DOM is live) — never in teardown, where a detached pane
+  // reports zero layout.
 
   const content = $derived($doc?.content ?? "");
   const rendered = $derived.by(() => {
@@ -30,21 +35,12 @@
     }
   });
   const isEmpty = $derived(content.trim() === "");
-  // Heading list from the renderer's own parser — order and slugs match the
-  // rendered DOM, so heading elements can be mapped to source lines.
-  const headings = $derived(
-    $doc?.language === "markdown" ? extractHeadings(content) : [],
-  );
 
   let pane: HTMLDivElement | undefined;
   let column: HTMLDivElement | undefined;
 
-  function headingEls(): HTMLElement[] {
-    return Array.from(
-      pane?.querySelectorAll<HTMLElement>(
-        ".reading-column h1, .reading-column h2, .reading-column h3, .reading-column h4",
-      ) ?? [],
-    );
+  function totalLines(): number {
+    return ($doc?.content.split(/\r\n|\r|\n/).length ?? 0);
   }
 
   /// Content-space y of an element inside the scroller.
@@ -53,26 +49,74 @@
     return el.getBoundingClientRect().top - rect.top + pane!.scrollTop;
   }
 
-  function captureAnchor(): PositionAnchor | null {
-    if (!pane) return null;
-    const els = headingEls();
+  /// The rendered blocks in document order with their source ranges.
+  /// A block's range ends at the start line of the next block that is not
+  /// its descendant (li inside ul, p inside li), or the document's last line.
+  function blockInfos(): BlockInfo[] {
+    if (!pane) return [];
+    const els = Array.from(
+      pane.querySelectorAll<HTMLElement>(".reading-column [data-source-line]"),
+    );
+    const metas = els.map((el) => ({
+      el,
+      start: Number(el.dataset.sourceLine ?? 0),
+      top: contentY(el),
+      height: el.getBoundingClientRect().height,
+    }));
+    const total = totalLines();
+    const blocks: BlockInfo[] = [];
+    for (let i = 0; i < metas.length; i++) {
+      let end = total;
+      for (let j = i + 1; j < metas.length; j++) {
+        if (!metas[i].el.contains(metas[j].el)) {
+          end = metas[j].start - 1;
+          break;
+        }
+      }
+      blocks.push({
+        start: metas[i].start,
+        end: Math.max(metas[i].start, end),
+        top: metas[i].top,
+        height: metas[i].height,
+      });
+    }
+    return blocks;
+  }
+
+  function captureLive(): PositionAnchor | null {
+    if (!pane || !pane.isConnected) return null;
     const maxScroll = pane.scrollHeight - pane.clientHeight;
-    return readerAnchorFromScroll(headings, maxScroll, pane.scrollTop, (i) => contentY(els[i]));
+    const anchorY = pane.scrollTop + pane.clientHeight * VIEWPORT_ANCHOR_FRACTION;
+    return anchorFromBlocks(blockInfos(), anchorY, maxScroll, pane.scrollTop);
   }
 
   function applyAnchor(anchor: PositionAnchor | null): void {
     if (!anchor || !pane) return;
-    const els = headingEls();
     const maxScroll = pane.scrollHeight - pane.clientHeight;
-    pane.scrollTop = readerScrollFromAnchor(headings, anchor, maxScroll, (i) => contentY(els[i]));
+    const targetY = pane.clientHeight * VIEWPORT_ANCHOR_FRACTION;
+    pane.scrollTop = scrollFromAnchor(blockInfos(), anchor, targetY, maxScroll);
   }
 
-  // Named-anchor preservation across live re-renders (split view typing):
-  // the pre-effect captures which heading was near the top of the viewport
-  // (from the DOM about to be replaced), the post-effect re-scrolls so that
-  // same heading lands at the same visual offset. Headingless documents
-  // fall back to raw scrollTop.
-  let preserved: { slug: string | null; topDelta: number; scrollTop: number } | null = null;
+  // Position anchors are captured continuously while mounted: the pane is
+  // live here, so geometry is real. This keeps the per-path anchor fresh for
+  // any subsequent mode switch, document switch, or close — teardown never
+  // captures (a detached pane reports zero layout).
+  let scrollRaf = 0;
+  function onScroll(): void {
+    if (scrollRaf) return;
+    scrollRaf = requestAnimationFrame(() => {
+      scrollRaf = 0;
+      const path = $doc?.path;
+      const anchor = captureLive();
+      if (path && anchor) rememberPosition(path, anchor);
+    });
+  }
+
+  // Named-block preservation across live re-renders (split view typing):
+  // the pre-effect captures the block at the viewport anchor (from the DOM
+  // about to be replaced), the post-effect re-scrolls so the same source
+  // line lands back at that anchor.
+  let preserved: PositionAnchor | null = null;
   let restored = false;
   let lastPath: string | null = null;
 
@@ -83,22 +127,14 @@
     if (path !== lastPath) {
       lastPath = path;
       restored = false;
+      preserved = null;
     }
   });
 
   $effect.pre(() => {
     rendered;
     if (!pane || !$doc || !restored) return;
-    const els = headingEls();
-    const top = pane.scrollTop + 48;
-    let idx = -1;
-    for (let i = 0; i < els.length; i++) {
-      if (contentY(els[i]) <= top) idx = i;
-    }
-    preserved =
-      idx >= 0 && headings[idx]
-        ? { slug: headings[idx].slug, topDelta: pane.scrollTop - contentY(els[idx]), scrollTop: pane.scrollTop }
-        : { slug: null, topDelta: 0, scrollTop: pane.scrollTop };
+    preserved = captureLive();
   });
 
   $effect(() => {
@@ -106,37 +142,32 @@
     if (!pane || !$doc) return;
     if (!restored) {
       restored = true;
-      applyAnchor(takeReaderPosition($doc.path));
+      applyAnchor(takePosition($doc.path));
+      // make the map reflect the restored position immediately
+      const anchor = captureLive();
+      if (anchor) rememberPosition($doc.path, anchor);
       return;
     }
     if (preserved) {
-      if (preserved.slug) {
-        const el = pane.querySelector<HTMLElement>(`#${CSS.escape(preserved.slug)}`);
-        if (el) {
-          pane.scrollTop = contentY(el) + preserved.topDelta;
-        } else {
-          pane.scrollTop = Math.min(preserved.scrollTop, pane.scrollHeight - pane.clientHeight);
-        }
-      } else {
-        pane.scrollTop = Math.min(preserved.scrollTop, pane.scrollHeight - pane.clientHeight);
-      }
+      applyAnchor(preserved);
       preserved = null;
+      const anchor = captureLive();
+      if (anchor) rememberPosition($doc.path, anchor);
     }
   });
 
-  // remember the logical position when this pane disappears (mode switch,
-  // split close, document switch, app teardown)
+  // continuous capture: scroll + fresh-mount registration
   $effect(() => {
-    $doc;
+    const el = pane;
+    if (!el) return;
+    el.addEventListener("scroll", onScroll, { passive: true });
     const path = $doc?.path;
+    const anchor = captureLive();
+    if (path && anchor) rememberPosition(path, anchor);
     return () => {
-      if (!path) return;
-      try {
-        const anchor = captureAnchor();
-        if (anchor) rememberReaderPosition(path, anchor);
-      } catch {
-        // pane already torn down mid-capture; the next visit starts at top
-      }
+      el.removeEventListener("scroll", onScroll);
+      if (scrollRaf) cancelAnimationFrame(scrollRaf);
+      scrollRaf = 0;
     };
   });
 

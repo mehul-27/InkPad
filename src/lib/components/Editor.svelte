@@ -18,8 +18,9 @@
   import { get } from "svelte/store";
   import { settings } from "../settings";
   import {
-    rememberEditorPosition,
-    takeEditorPosition,
+    rememberPosition,
+    takePosition,
+    VIEWPORT_ANCHOR_FRACTION,
     type PositionAnchor,
   } from "../position";
 
@@ -168,43 +169,44 @@
   let viewPath: string | undefined;
   let applyingExternal = false;
   let lastWrap = true;
+  // Scroll requested before CodeMirror's first measure: applied from the
+  // updateListener once geometry is real (see createView).
+  let pendingScroll: { pos: number } | null = null;
 
-  // Phase 6 position preservation: record where the user was (cursor line +
-  // top visible line) when the editor goes away, and restore that location
-  // when it comes back. Logical lines, not pixels — Reader and Editor have
-  // different line heights (spec §"reading/edit position").
+  // Phase 6 position preservation: the viewport anchor (25% from the top) is
+  // a source line — captured while the editor is live, restored so the same
+  // line lands back at the same viewport fraction. Positions are remembered
+  // continuously while mounted; teardown never captures (a detached view has
+  // no geometry). The Reader's anchor is consulted through the same shared
+  // map, so Reading → Edit hands over the reading location.
   function captureAnchor(v: EditorView): PositionAnchor {
     const state = v.state;
     const scroller = v.scrollDOM;
-    let topLine = 1;
+    let line = 1;
     try {
-      const block = v.lineBlockAtHeight(scroller.scrollTop);
-      topLine = state.doc.lineAt(Math.min(block.from, state.doc.length)).number;
+      const anchorY = scroller.scrollTop + scroller.clientHeight * VIEWPORT_ANCHOR_FRACTION;
+      const block = v.lineBlockAtHeight(anchorY);
+      line = state.doc.lineAt(Math.min(block.from, state.doc.length)).number;
     } catch {
-      // view mid-teardown: fall back to the cursor
-      topLine = state.doc.lineAt(state.selection.main.head).number;
+      // view mid-teardown or not yet measured: fall back to the cursor
+      line = state.doc.lineAt(state.selection.main.head).number;
     }
     const cursorLine = state.doc.lineAt(state.selection.main.head).number;
-    return {
-      line: topLine,
-      frac: state.doc.lines > 0 ? topLine / state.doc.lines : 0,
-      cursorLine,
-    };
+    const maxScroll = scroller.scrollHeight - scroller.clientHeight;
+    const frac = maxScroll > 0 ? Math.min(1, Math.max(0, scroller.scrollTop / maxScroll)) : 0;
+    return { line, frac, cursorLine };
   }
 
   function applyAnchor(v: EditorView, anchor: PositionAnchor | null): void {
     if (!anchor) return;
     const state = v.state;
-    const line = Math.min(anchor.line, state.doc.lines);
-    if (line < 1) return;
-    const scrollPos = state.doc.line(line).from;
-    const cursorLine = anchor.cursorLine != null ? Math.min(Math.max(anchor.cursorLine, 1), state.doc.lines) : null;
-    const effects = [EditorView.scrollIntoView(scrollPos, { y: "start" })];
-    if (cursorLine != null) {
-      v.dispatch({ selection: { anchor: state.doc.line(cursorLine).from }, effects });
-    } else {
-      v.dispatch({ effects });
-    }
+    let line = anchor.line;
+    if (line < 1) line = Math.round(anchor.frac * state.doc.lines); // fraction-only anchor
+    line = Math.min(Math.max(line, 1), state.doc.lines);
+    const pos = state.doc.line(line).from;
+    const cursorLine = anchor.cursorLine != null ? Math.min(Math.max(anchor.cursorLine, 1), state.doc.lines) : line;
+    v.dispatch({ selection: { anchor: state.doc.line(cursorLine).from } });
+    pendingScroll = { pos };
   }
 
   function lineSeparatorFor(text: string): string | undefined {
@@ -242,6 +244,24 @@
             { key: "Mod-h", run: openSearchPanel },
           ]),
           EditorView.updateListener.of((u) => {
+            if (u.geometryChanged && pendingScroll) {
+              // first measure complete: line heights and viewport size are
+              // real, so the anchor line can be placed at the viewport
+              // fraction (25% from the top) with exact geometry
+              const p = pendingScroll;
+              pendingScroll = null;
+              try {
+                const scroller = u.view.scrollDOM;
+                const block = u.view.lineBlockAt(p.pos);
+                const maxScroll = scroller.scrollHeight - scroller.clientHeight;
+                scroller.scrollTop = Math.min(
+                  Math.max(block.top - scroller.clientHeight * VIEWPORT_ANCHOR_FRACTION, 0),
+                  maxScroll,
+                );
+              } catch {
+                // geometry not yet usable; the user's next interaction resets scroll
+              }
+            }
             if (u.docChanged && !applyingExternal) {
               markDocumentDirty(u.state.doc.toString());
             }
@@ -255,24 +275,17 @@
 
   // Recreate per document (fresh history + line endings); otherwise mirror
   // authoritative store content into the editor when it changes externally.
-  // Positions are remembered when an old editor is torn down and restored
-  // when a new one (for a previously visited path) mounts.
+  // Positions are remembered continuously (scroll) and restored when a
+  // previously visited path mounts again.
   $effect(() => {
     const current = $doc;
     if (!current) return;
     if (!view || viewPath !== current.path) {
-      if (view) {
-        try {
-          rememberEditorPosition(viewPath ?? "", captureAnchor(view));
-        } catch {
-          // view already tearing down; this visit's anchor is lost
-        }
-        view.destroy();
-      }
+      if (view) view.destroy();
       viewPath = current.path;
       lastWrap = get(settings).wordWrap;
       view = createView(current, lastWrap);
-      applyAnchor(view, takeEditorPosition(current.path));
+      applyAnchor(view, takePosition(current.path));
       return;
     }
     const editorText = view.state.doc.toString();
@@ -284,21 +297,29 @@
     applyingExternal = false;
   });
 
-  // Remember the position whenever this editor goes away (mode switch, split
-  // close, document switch, app teardown). `$doc` keeps the effect in sync
-  // with document changes; the cleanup always captures the view that was
-  // live when the effect last ran.
+  // Continuous position capture while mounted: the view is live here, so
+  // scroll geometry is real. Keeps the per-path anchor fresh for any later
+  // mode switch, document switch, or close. Capture fires on scroll only —
+  // the restore's deferred scroll itself fires one, so the first capture
+  // always reflects the restored position, never the pre-restore scroll 0.
+  let scrollRaf = 0;
   $effect(() => {
-    $doc;
-    const path = $doc?.path;
     const v = view;
+    const path = $doc?.path;
+    if (!v || !path) return;
+    const scroller = v.scrollDOM;
+    const onScroll = () => {
+      if (scrollRaf) return;
+      scrollRaf = requestAnimationFrame(() => {
+        scrollRaf = 0;
+        if (scroller.isConnected && !pendingScroll) rememberPosition(path, captureAnchor(v));
+      });
+    };
+    scroller.addEventListener("scroll", onScroll, { passive: true });
     return () => {
-      if (!path || !v) return;
-      try {
-        rememberEditorPosition(path, captureAnchor(v));
-      } catch {
-        // view destroyed by the document effect; nothing to capture
-      }
+      scroller.removeEventListener("scroll", onScroll);
+      if (scrollRaf) cancelAnimationFrame(scrollRaf);
+      scrollRaf = 0;
     };
   });
 

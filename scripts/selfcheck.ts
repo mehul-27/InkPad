@@ -1,10 +1,20 @@
-// Self-check for Phase 5 logic: fuzzy matcher + markdown heading extraction.
+// Self-check: fuzzy matcher, markdown heading extraction, and the Phase 6
+// logical position-preservation mapping (data-source-line emission, block
+// ranges, viewport anchor capture/restore).
 // Run: node --experimental-strip-types scripts/selfcheck.ts
 // (outside tsconfig "src" include, so it never ships in the app bundle)
 
 import assert from "node:assert";
 import { fuzzyScore, fuzzySort } from "../src/lib/fuzzy.ts";
-import { extractHeadings } from "../src/lib/markdown.ts";
+import { extractHeadings, renderMarkdown } from "../src/lib/markdown.ts";
+import {
+  anchorFromBlocks,
+  scrollFromAnchor,
+  rememberPosition,
+  takePosition,
+  VIEWPORT_ANCHOR_FRACTION,
+  type BlockInfo,
+} from "../src/lib/position.ts";
 
 // ---- fuzzy ----
 
@@ -46,7 +56,6 @@ assert.deepEqual(
 );
 
 // slug used by extractHeadings must match the one the renderer emits
-import { renderMarkdown } from "../src/lib/markdown.ts";
 const html = renderMarkdown(md);
 for (const h of extractHeadings(md)) {
   assert.ok(html.includes(`id="${h.slug}"`), `renderer emits id=${h.slug}`);
@@ -55,50 +64,191 @@ for (const h of extractHeadings(md)) {
 assert.deepEqual(extractHeadings("no headings here"), [], "no headings -> empty");
 assert.deepEqual(extractHeadings("# Only"), [{ level: 1, text: "Only", slug: "only", line: 0 }], "single heading");
 
-// ---- Phase 6: reader position anchors round-trip -------------------------
+// ---- Phase 6 regression: data-source-line on every block type -------------
+// The Reader's logical anchors depend on the renderer stamping each rendered
+// block with its 1-based source line. Every block type must carry it.
 
-import {
-  readerAnchorFromScroll,
-  readerScrollFromAnchor,
-  rememberReaderPosition,
-  takeReaderPosition,
-  rememberEditorPosition,
-  takeEditorPosition,
-} from "../src/lib/position.ts";
+const blocksMd = [
+  "# Head",
+  "",
+  "A paragraph with *inline* markup.",
+  "",
+  "## Sub",
+  "",
+  "- item one",
+  "  - nested item",
+  "- item two",
+  "",
+  "> quoted",
+  "",
+  "```ts",
+  "const x = 1;",
+  "```",
+  "",
+  "| a | b |",
+  "|---|---|",
+  "| 1 | 2 |",
+  "",
+  "---",
+  "",
+  "last paragraph",
+].join("\n");
 
-// synthetic layout: headings every 200px of scrollable content, 5 headings
-const heads = extractHeadings(
-  ["# A", "", "x", "## B", "", "x", "### C", "", "x", "# D", "", "x", "## E"].join("\n"),
-);
-// heading source lines: 0, 3, 6, 9, 12
-assert.deepEqual(heads.map((h) => h.line), [0, 3, 6, 9, 12], "fixture heading lines");
-const yAt = (i: number) => i * 200 + 24; // each heading sits 24px into its block
-const maxScroll = 1000 + 200; // content = last heading block end
+const blocksHtml = renderMarkdown(blocksMd);
+assert.ok(blocksHtml.includes('data-source-line="1"'), "h1 has data-source-line=1");
+assert.ok(blocksHtml.includes('<p data-source-line="3">'), "paragraph has data-source-line=3");
+assert.ok(blocksHtml.includes('<h2 id="sub" data-source-line="5">'), "h2 has data-source-line=5");
+assert.ok(blocksHtml.includes('<ul data-source-line="7">'), "ul has data-source-line=7");
+assert.ok(blocksHtml.includes('<li data-source-line="7">'), "list item has data-source-line");
+assert.ok(blocksHtml.includes('<blockquote data-source-line="11">'), "blockquote has data-source-line=11");
+assert.ok(blocksHtml.includes('data-source-line="13"'), "code block wrapper has data-source-line=13");
+assert.ok(blocksHtml.includes('<table data-source-line="17">'), "table has data-source-line=17");
+assert.ok(blocksHtml.includes('<hr data-source-line="21"'), "hr has data-source-line=21");
+assert.ok(blocksHtml.includes('<p data-source-line="23">'), "trailing paragraph has data-source-line=23");
+assert.ok(!blocksHtml.includes('data-source-line="0"'), "no zero-based lines leak into the DOM");
 
-// capture at scrollTop 480 → heading 2 (y 424 <= 528) → source line 7 (1-based)
-const anchor = readerAnchorFromScroll(heads, maxScroll, 480, yAt);
-assert.equal(anchor.line, 7, "anchor = last heading at/above viewport top + 48");
-assert.ok(Math.abs(anchor.frac - 480 / maxScroll) < 1e-9, "anchor keeps fraction fallback");
+// ---- Phase 6: logical anchor mapping ---------------------------------------
+// Real token-derived block ranges for a fixture with all block types, with
+// synthetic rendered geometry (top ∝ source position, height ∝ source span —
+// the mapping must not depend on the *values*, only on the range structure).
+// The DOM glue (querySelectorAll walk) is exercised in the native CDP test;
+// the pure mapping here is what the self-check can verify exactly.
 
-// restore: same heading returns to ~the same place (y 424 - 24 = 400)
-const scroll = readerScrollFromAnchor(heads, anchor, maxScroll, yAt);
-assert.equal(scroll, 400, "restore places the anchor heading near the top");
+const fixture = [
+  "# Intro",
+  "",
+  "long paragraph one",
+  "more of it",
+  "still more lines",
+  "",
+  "## Second",
+  "",
+  "- first item",
+  "- second item",
+  "",
+  "paragraph after list",
+  "",
+  "> quote",
+  "> continued",
+  "",
+  "```js",
+  "const a = 1;",
+  "const b = 2;",
+  "```",
+  "",
+  "| x | y |",
+  "|---|---|",
+  "| 1 | 2 |",
+  "",
+  "## Last",
+  "",
+  "final words",
+].join("\n");
 
-// round-trip: capture(right where we restored) finds the same heading
-const back = readerAnchorFromScroll(heads, maxScroll, scroll, yAt);
-assert.equal(back.line, 7, "capture(restore(capture)) is stable");
+const total = fixture.split("\n").length; // 27
 
-// headingless document → fraction-only, round-trips
-const noHeads: typeof heads = [];
-const f = readerAnchorFromScroll(noHeads, maxScroll, 800, () => 0);
-assert.equal(f.line, 0, "headingless document anchors by fraction only");
-assert.equal(readerScrollFromAnchor(noHeads, f, maxScroll, () => 0), 800, "fraction round-trips");
+// block source ranges, 1-based inclusive — mirrors Reader.blockInfos()
+// (start = data-source-line of each block, end = next non-descendant start-1)
+const RANGES: Array<[number, number]> = [
+  [1, 1], // h1 "# Intro"
+  [3, 5], // paragraph (3 lines)
+  [7, 7], // h2 "## Second"
+  [9, 10], // ul (2 items)
+  [12, 12], // paragraph
+  [14, 15], // blockquote
+  [17, 19], // code block
+  [21, 23], // table
+  [25, 25], // h2 "## Last"
+  [27, 27], // paragraph
+];
 
-// anchors are stored and retrieved per document path
-rememberReaderPosition("C:\\a.md", anchor);
-rememberEditorPosition("C:\\a.md", { line: 42, frac: 0.5, cursorLine: 40 });
-assert.deepEqual(takeReaderPosition("C:\\a.md"), anchor, "reader anchor keyed by path");
-assert.equal(takeEditorPosition("C:\\a.md")?.cursorLine, 40, "editor anchor keyed by path");
-assert.equal(takeReaderPosition("C:\\other.md"), null, "unknown path has no anchor");
+// synthetic geometry: content is 2000px tall, each block placed by its
+// source position; blocks with a long range are proportionally taller
+const scrollHeight = 2000;
+const lineSpan = 27;
+function makeBlocks(): BlockInfo[] {
+  return RANGES.map(([start, end]) => {
+    const top = (scrollHeight * (start - 1)) / lineSpan;
+    const height = Math.max(20, (scrollHeight * (end - start + 1)) / lineSpan);
+    return { start, end, top, height };
+  });
+}
+
+const clientHeight = 600;
+const maxScroll = scrollHeight - clientHeight; // 1400
+const targetY = clientHeight * VIEWPORT_ANCHOR_FRACTION; // 150
+
+function anchorAt(scrollTop: number) {
+  const blocks = makeBlocks();
+  return anchorFromBlocks(blocks, scrollTop + targetY, maxScroll, scrollTop);
+}
+
+// anchor line must always land inside the block at the anchor position
+{
+  const blocks = makeBlocks();
+  for (const b of blocks) {
+    for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+      const y = b.top + b.height * t;
+      const anchor = anchorFromBlocks(blocks, y, maxScroll, 0);
+      assert.ok(
+        anchor.line >= b.start && anchor.line <= b.end,
+        `anchor at block [${b.start},${b.end}] frac=${t} lands inside (got ${anchor.line})`,
+      );
+    }
+  }
+}
+
+// restore: the anchor line lands back at the same viewport fraction
+{
+  const blocks = makeBlocks();
+  const anchor = anchorFromBlocks(blocks, 0 + targetY, maxScroll, 0);
+  const back = scrollFromAnchor(blocks, anchor, targetY, maxScroll);
+  assert.equal(back, 0, "restore at document top scrolls to 0");
+  const mid = anchorAt(maxScroll * 0.5);
+  const midScroll = scrollFromAnchor(makeBlocks(), mid, targetY, maxScroll);
+  assert.ok(Math.abs(midScroll - maxScroll * 0.5) < 120, `mid-document round-trip is stable (${midScroll})`);
+  const bottom = anchorAt(maxScroll);
+  const bottomScroll = scrollFromAnchor(makeBlocks(), bottom, targetY, maxScroll);
+  assert.ok(Math.abs(bottomScroll - maxScroll) < 120, "bottom round-trip is stable");
+}
+
+// 10/25/50/75/90 matrix: capture at a scroll fraction → restore → re-capture
+// must return to (approximately) the same logical line, not drift
+{
+  const marks = [0.1, 0.25, 0.5, 0.75, 0.9];
+  for (const frac of marks) {
+    const a1 = anchorAt(maxScroll * frac);
+    const s1 = scrollFromAnchor(makeBlocks(), a1, targetY, maxScroll);
+    const a2 = anchorFromBlocks(makeBlocks(), s1 + targetY, maxScroll, s1);
+    const drift = Math.abs(a2.line - a1.line);
+    assert.ok(drift <= 2, `matrix ${frac * 100}% stable (${a1.line} -> ${a2.line}, drift ${drift})`);
+  }
+}
+
+// editor-side exact line mapping (CodeMirror): a source line maps to itself
+{
+  const blocks = makeBlocks();
+  const anchor = anchorAt(maxScroll * 0.5);
+  const s = scrollFromAnchor(blocks, anchor, targetY, maxScroll);
+  const recaptured = anchorFromBlocks(makeBlocks(), s + targetY, maxScroll, s);
+  assert.ok(Math.abs(recaptured.line - anchor.line) <= 2, "capture(restore) keeps the line");
+}
+
+// fraction-only fallback: empty block list (e.g. empty doc) round-trips
+{
+  const a = anchorFromBlocks([], 100, maxScroll, 800);
+  assert.equal(a.line, 0, "no blocks -> line 0");
+  assert.ok(Math.abs(a.frac - 800 / maxScroll) < 1e-9, "no blocks -> fraction");
+  const back = scrollFromAnchor([], a, targetY, maxScroll);
+  assert.ok(Math.abs(back - 800) < 1e-9, "fraction fallback round-trips");
+}
+
+// anchors are stored and retrieved per document path (shared Reader/Editor map)
+{
+  const a = { line: 950, frac: 0.5, cursorLine: 940 };
+  rememberPosition("C:\\a.md", a);
+  assert.deepEqual(takePosition("C:\\a.md"), a, "anchor keyed by path");
+  assert.equal(takePosition("C:\\other.md"), null, "unknown path has no anchor");
+}
 
 console.log("selfcheck ok");

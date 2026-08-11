@@ -23,6 +23,23 @@ const md = new MarkdownIt({
 
 md.use(taskLists, { enabled: false, label: false });
 
+// ---- Source-line metadata (Phase 6 regression fix) ------------------------
+// Every block-level token carries its 0-based source line (token.map[0]); the
+// renderer stamps it as data-source-line (1-based) on the rendered element so
+// the Reader can map viewport positions back to Markdown source lines without
+// a second parser. Nested blocks (li inside ul, p inside li) keep their own
+// attribute; the Reader resolves ranges by DOM ancestry.
+const BLOCK_TAGS = new Set([
+  "heading_open",
+  "paragraph_open",
+  "bullet_list_open",
+  "ordered_list_open",
+  "list_item_open",
+  "blockquote_open",
+  "table_open",
+  "hr",
+]);
+
 // ---- Heading anchors (spec §10: heading anchors/IDs) -------------------
 
 const usedSlugs = new Map<string, number>();
@@ -79,7 +96,8 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const lang = info.split(/\s+/)[0] ?? "";
   const code = defaultFence(tokens, idx, options, env, self);
   const label = lang ? `<span class="code-lang">${md.utils.escapeHtml(lang)}</span>` : "";
-  return `<div class="code-block">${label}<button type="button" class="code-copy">Copy</button>${code}</div>`;
+  const srcLine = token.map ? ` data-source-line="${token.map[0] + 1}"` : "";
+  return `<div class="code-block"${srcLine}>${label}<button type="button" class="code-copy">Copy</button>${code}</div>`;
 };
 
 // ---- Images: InkPad is fully offline (spec §31). Local paths are read by
@@ -102,7 +120,13 @@ md.renderer.rules.image = (tokens, idx) => {
 
 export function renderMarkdown(content: string): string {
   usedSlugs.clear();
-  return md.render(content);
+  const tokens = md.parse(content, {});
+  for (const t of tokens) {
+    if (t.map && BLOCK_TAGS.has(t.type)) {
+      t.attrSet("data-source-line", String(t.map[0] + 1));
+    }
+  }
+  return md.renderer.render(tokens, md.options, {});
 }
 
 // ---- Document outline (spec §"Document Outline"): same parser, same slug
