@@ -1697,7 +1697,7 @@ dependencies = [
 
 [[package]]
 name = "inkpad"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "base64 0.22.1",
  "serde",
@@ -1707,6 +1707,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

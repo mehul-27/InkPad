@@ -12,7 +12,7 @@ const RECENT_LIMIT: usize = 10;
 /// it is extracted to the writable app-data directory (never the
 /// installation directory), shown in Reading mode, and deliberately kept
 /// out of the recent-files list.
-const WELCOME_CONTENT: &str = include_str!("../assets/Welcome.md");
+const WELCOME_CONTENT: &str = include_str!("../assets/welcome.txt");
 
 fn first_run_marker(app: &AppHandle) -> Option<PathBuf> {
     app.path()
@@ -139,12 +139,64 @@ fn write_text_file(path: String, content: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn reveal_in_explorer(path: String) {
+fn reveal_in_explorer(path: String) -> Result<(), String> {
     #[cfg(windows)]
-    let _ = std::process::Command::new("explorer")
-        .arg("/select,")
-        .arg(&path)
-        .spawn();
+    {
+        let target = PathBuf::from(&path);
+        if !target.exists() {
+            return Err("The file no longer exists on disk.".to_string());
+        }
+        // explorer.exe expects `/select,<path>` as ONE raw argument, but
+        // std::process::Command quotes every arg containing spaces, and
+        // explorer's own parser does not strip those quotes (it then opens
+        // the default location). Build the command line by hand via
+        // CreateProcessW so the argument reaches explorer unquoted.
+        // This also keeps spaces, &, %, parentheses and Unicode in the path
+        // safe: explorer consumes the whole remainder of its command line
+        // after /select,.
+        use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::System::Threading::{
+            CreateProcessW, PROCESS_INFORMATION, STARTUPINFOW,
+        };
+
+        let mut cmd: Vec<u16> = format!("explorer.exe /select,{path}")
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        let mut si: STARTUPINFOW = unsafe { std::mem::zeroed() };
+        si.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
+        let mut pi: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
+        let ok = unsafe {
+            CreateProcessW(
+                std::ptr::null(),
+                cmd.as_mut_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                0,
+                0,
+                std::ptr::null_mut(),
+                std::ptr::null(),
+                &si,
+                &mut pi,
+            )
+        };
+        if ok == 0 {
+            return Err(format!(
+                "Could not open the file location: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+        unsafe {
+            CloseHandle(pi.hProcess);
+            CloseHandle(pi.hThread);
+        }
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        Ok(())
+    }
 }
 
 // ---- Phase 3: local image loading for the Markdown Reader ----

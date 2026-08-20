@@ -37,15 +37,8 @@ function load(): Settings {
 
 export const settings = writable<Settings>(load());
 
-let writing = false;
 settings.subscribe((value) => {
-  if (writing) return;
-  writing = true;
-  try {
-    localStorage.setItem("inkpad-settings", JSON.stringify(value));
-  } finally {
-    writing = false;
-  }
+  localStorage.setItem("inkpad-settings", JSON.stringify(value));
 });
 
 /** Settings writing helper used by the Settings panel. */

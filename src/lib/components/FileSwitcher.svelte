@@ -8,6 +8,7 @@
   import { fuzzySort } from "../fuzzy";
   import { overlay, recentFiles } from "../stores";
   import { openPath } from "../actions";
+  import { filenameOf } from "../docs";
 
   interface RecentFile {
     path: string;
@@ -16,11 +17,11 @@
   }
 
   function fileParts(path: string): RecentFile {
-    const i = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/"));
+    const name = filenameOf(path);
     return {
       path,
-      name: i === -1 ? path : path.slice(i + 1),
-      dir: i === -1 ? "" : path.slice(0, i),
+      name,
+      dir: path.slice(0, Math.max(path.length - name.length - 1, 0)),
     };
   }
 

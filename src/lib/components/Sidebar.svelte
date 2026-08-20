@@ -1,6 +1,7 @@
 <script lang="ts">
   import { sidebarOpen, recentFiles, doc, overlay } from "../stores";
   import { openDocument, openPath } from "../actions";
+  import { filenameOf } from "../docs";
 </script>
 
 <aside class="sidebar" class:hidden={!$sidebarOpen}>
@@ -18,7 +19,7 @@
         type="button"
         title={path}
         onclick={() => openPath(path)}
-      >{path.split(/[\\/]/).pop()}</button>
+      >{filenameOf(path)}</button>
     {/each}
   </div>
 

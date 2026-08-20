@@ -1,6 +1,6 @@
 {
   "name": "inkpad",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A lightweight Windows-first Markdown reader and editor",
   "type": "module",
   "scripts": {
@@ -13,7 +13,6 @@
   "license": "MIT",
   "dependencies": {
     "@codemirror/commands": "^6.10.4",
-    "@codemirror/lang-html": "^6.4.12",
     "@codemirror/lang-markdown": "^6.5.2",
     "@codemirror/language": "^6.12.4",
     "@codemirror/search": "^6.7.1",

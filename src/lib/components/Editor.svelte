@@ -7,6 +7,7 @@
 
   import { EditorState } from "@codemirror/state";
   import { EditorView, keymap, lineNumbers, drawSelection } from "@codemirror/view";
+  import { onDestroy } from "svelte";
   import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
   import { markdown } from "@codemirror/lang-markdown";
   import { search, searchKeymap, openSearchPanel, SearchQuery } from "@codemirror/search";
@@ -369,7 +370,17 @@
     });
     view.focus();
   });
-const fontPx = $derived(
+  // Unmount (mode switch away, document close): the editor must be fully
+  // destroyed, otherwise the whole CM instance — DOM, syntax tree, and the
+  // ResizeObserver that keeps it alive — stays in memory per switch.
+  onDestroy(() => {
+    if (view) {
+      view.destroy();
+      view = undefined;
+    }
+  });
+
+  const fontPx = $derived(
     $settings.editorFontSize === "small"
       ? "12.5px"
       : $settings.editorFontSize === "large"

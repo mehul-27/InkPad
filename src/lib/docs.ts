@@ -1,24 +1,14 @@
 // Generic document model (spec §22). V1 types: Markdown and plain text.
-// Adding a future format = one entry in languageFor + capabilitiesFor.
+// Adding a future format = one entry in languageFor.
 
 export type Language = "markdown" | "plaintext";
-
-export interface Capabilities {
-  canEdit: boolean;
-  canRender: boolean;
-  canSyntaxHighlight: boolean;
-  canSave: boolean;
-  canCopySource: boolean;
-}
 
 export interface Document {
   path: string;
   filename: string;
-  extension: string;
   content: string;
   language: Language;
   dirty: boolean;
-  capabilities: Capabilities;
   /** Bundled welcome document: never autosaved, saves route to Save As. */
   welcome: boolean;
 }
@@ -46,37 +36,14 @@ export function isSupportedFile(path: string): boolean {
   return languageFor(path) !== null;
 }
 
-export function capabilitiesFor(language: Language): Capabilities {
-  switch (language) {
-    case "markdown":
-      return {
-        canEdit: true,
-        canRender: true,
-        canSyntaxHighlight: true,
-        canSave: true,
-        canCopySource: true,
-      };
-    case "plaintext":
-      return {
-        canEdit: true,
-        canRender: false,
-        canSyntaxHighlight: false,
-        canSave: true,
-        canCopySource: true,
-      };
-  }
-}
-
 export function createDocument(path: string, content: string, welcome = false): Document {
   const language = languageFor(path) ?? "plaintext";
   return {
     path,
     filename: filenameOf(path),
-    extension: extensionOf(path),
     content,
     language,
     dirty: false,
-    capabilities: capabilitiesFor(language),
     welcome,
   };
 }

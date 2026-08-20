@@ -8,7 +8,7 @@
   import { doc, mode, overlay, sidebarOpen, theme } from "../stores";
   import {
     openDocument,
-    saveDocument,
+    flushSave,
     saveDocumentAs,
     closeDocument,
     revealDocument,
@@ -30,7 +30,7 @@
   const commands = $derived.by((): Command[] => {
     const list: Command[] = [
       { title: "Open File...", shortcut: "Ctrl+O", run: () => void openDocument() },
-      { title: "Save", shortcut: "Ctrl+S", requiresDoc: true, run: () => void saveDocument() },
+      { title: "Save", shortcut: "Ctrl+S", requiresDoc: true, run: () => void flushSave() },
       { title: "Save As...", shortcut: "Ctrl+Shift+S", requiresDoc: true, run: () => void saveDocumentAs() },
       { title: "Close Document", requiresDoc: true, run: () => void closeDocument() },
       { title: "Reveal in Explorer", requiresDoc: true, run: revealDocument },

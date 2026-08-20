@@ -9,3 +9,8 @@ node_modules
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 /src-tauri/target
+
+# Markdown documents are user content — never track them by default.
+# README.md is the exception.
+*.md
+!README.md

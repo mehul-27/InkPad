@@ -67,10 +67,6 @@ export async function flushSave(): Promise<void> {
   }
 }
 
-export async function saveDocument(): Promise<void> {
-  await flushSave();
-}
-
 async function confirmDiscardIfDirty(): Promise<boolean> {
   if (!get(doc)?.dirty) return true;
   const ok = await confirm(
@@ -149,7 +145,10 @@ export async function closeDocument(): Promise<void> {
 
 export function revealDocument(): void {
   const current = get(doc);
-  if (current) revealInExplorer(current.path);
+  if (!current) return;
+  void revealInExplorer(current.path).catch((e) => {
+    message(String(e), { title: "InkPad", kind: "error" });
+  });
 }
 
 // ---- Phase 5/6: view / search actions for shortcuts and the palette -------

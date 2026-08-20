@@ -1,7 +1,7 @@
 <script lang="ts">
   import { get } from "svelte/store";
   import { mode, sidebarOpen, theme, doc, saveState, overlay } from "../stores";
-  import { saveDocument, saveDocumentAs, closeDocument, revealDocument } from "../actions";
+  import { flushSave, saveDocumentAs, closeDocument, revealDocument } from "../actions";
 
   let menuOpen = $state(false);
   let toast = $state<string | null>(null);
@@ -96,7 +96,7 @@
           {#if $doc.language === "markdown"}
             <button type="button" role="menuitem" onclick={() => { copyMarkdown(); menuOpen = false; }}>Copy Markdown</button>
           {/if}
-          <button type="button" role="menuitem" onclick={() => { saveDocument(); menuOpen = false; }}>Save</button>
+          <button type="button" role="menuitem" onclick={() => { void flushSave(); menuOpen = false; }}>Save</button>
           <button type="button" role="menuitem" onclick={() => { saveDocumentAs(); menuOpen = false; }}>Save As...</button>
           <button type="button" role="menuitem" onclick={() => { revealDocument(); menuOpen = false; }}>Reveal in Explorer</button>
           <button type="button" role="menuitem" onclick={() => { closeDocument(); menuOpen = false; }}>Close</button>

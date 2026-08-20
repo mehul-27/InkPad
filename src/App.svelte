@@ -26,7 +26,6 @@
     openDocument,
     refreshRecents,
     flushSave,
-    saveDocument,
     saveDocumentAs,
     toggleMode,
     toggleSplit,
@@ -111,7 +110,7 @@
       } else if (k === "s") {
         e.preventDefault();
         if (e.shiftKey) void saveDocumentAs();
-        else void saveDocument();
+        else void flushSave();
       } else if (k === "e" && e.shiftKey) {
         e.preventDefault();
         toggleSplit();
