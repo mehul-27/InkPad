@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- InkPad — Mono Light icon -->
+  <rect x="48" y="48" width="928" height="928" rx="208" fill="#F7F5F0"/>
+
+  <!-- Document -->
+  <path d="M286 190
+           H620
+           L738 308
+           V776
+           C738 808 712 834 680 834
+           H344
+           C312 834 286 808 286 776
+           V248
+           C286 216 312 190 344 190
+           Z"
+        fill="#171A21"/>
+
+  <!-- Fold -->
+  <path d="M620 190
+           V282
+           C620 314 646 340 678 340
+           H738
+           Z"
+        fill="#8B8F98"/>
+
+  <!-- Text lines -->
+  <rect x="382" y="486" width="258" height="48" rx="24" fill="#F7F5F0"/>
+  <rect x="382" y="584" width="190" height="48" rx="24" fill="#F7F5F0"/>
+</svg>
