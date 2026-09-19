@@ -60,7 +60,7 @@ Contributions, fixes, and improvements are welcome.
 
 Download the latest Windows installer from
 [GitHub Releases](https://github.com/mehul-27/InkPad/releases)
-(`InkPad_1.1.0_x64-setup.exe` or `InkPad_1.1.0_x64_en-US.msi`).
+(`InkPad_1.1.1_x64-setup.exe` or `InkPad_1.1.1_x64_en-US.msi`).
 
 ### PowerShell
 

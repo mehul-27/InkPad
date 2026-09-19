@@ -26,6 +26,7 @@ import {
   writeTextFile,
   getRecentFiles,
   addRecentFile,
+  removeRecentFile,
   revealInExplorer,
 } from "./api";
 import { doc, mode, recentFiles, saveState, editorCommand, overlay, distractionFree } from "./stores";
@@ -112,6 +113,18 @@ async function confirmDiscardIfDirty(): Promise<boolean> {
 
 export async function refreshRecents(): Promise<void> {
   recentFiles.set(await getRecentFiles());
+}
+
+// Remove one entry from the recent-files list (sidebar context menu). The
+// file on disk is untouched and an open document stays open — only the
+// history entry goes away.
+export async function removeRecentPath(path: string): Promise<void> {
+  try {
+    await removeRecentFile(path);
+    await refreshRecents();
+  } catch (e) {
+    message(String(e), { title: "InkPad", kind: "error" });
+  }
 }
 
 export async function openPath(path: string): Promise<void> {

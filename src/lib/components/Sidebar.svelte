@@ -1,7 +1,66 @@
 <script lang="ts">
   import { sidebarOpen, recentFiles, doc, overlay } from "../stores";
-  import { openDocument, openPath } from "../actions";
+  import { openDocument, openPath, removeRecentPath } from "../actions";
   import { filenameOf } from "../docs";
+
+  // Right-click menu for a recent entry. Fixed positioning keeps it clear of
+  // the sidebar's overflow clipping; it dismisses on any outside press,
+  // Escape, scroll, resize, or when the sidebar is hidden.
+  const MENU_WIDTH = 184;
+  const MENU_HEIGHT = 38;
+
+  let menu = $state<{ path: string; x: number; y: number } | null>(null);
+  let menuEl = $state<HTMLDivElement | undefined>();
+
+  function openMenu(event: MouseEvent, path: string): void {
+    event.preventDefault();
+    const x = Math.max(8, Math.min(event.clientX, window.innerWidth - MENU_WIDTH - 8));
+    const y = Math.max(8, Math.min(event.clientY, window.innerHeight - MENU_HEIGHT - 8));
+    menu = { path, x, y };
+  }
+
+  function closeMenu(): void {
+    menu = null;
+  }
+
+  function remove(path: string): void {
+    closeMenu();
+    void removeRecentPath(path);
+  }
+
+  $effect(() => {
+    if (!menu) return;
+    const inside = (target: EventTarget | null): boolean =>
+      menuEl != null && target instanceof Node && menuEl.contains(target);
+    const onPointerDown = (e: PointerEvent) => {
+      if (!inside(e.target)) closeMenu();
+    };
+    const onKeydown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeMenu();
+    };
+    const onContextMenu = (e: MouseEvent) => {
+      // right-clicking another entry reopens; anywhere else dismisses
+      if (!inside(e.target)) closeMenu();
+    };
+    const onScroll = () => closeMenu();
+    const onResize = () => closeMenu();
+    window.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("keydown", onKeydown);
+    window.addEventListener("contextmenu", onContextMenu, true);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("keydown", onKeydown);
+      window.removeEventListener("contextmenu", onContextMenu, true);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onResize);
+    };
+  });
+
+  $effect(() => {
+    if (!$sidebarOpen) closeMenu();
+  });
 </script>
 
 <aside class="sidebar" class:hidden={!$sidebarOpen}>
@@ -19,6 +78,7 @@
         type="button"
         title={path}
         onclick={() => openPath(path)}
+        oncontextmenu={(e) => openMenu(e, path)}
       >{filenameOf(path)}</button>
     {/each}
   </div>
@@ -39,6 +99,26 @@
       Settings
     </button>
   </div>
+
+  {#if menu}
+    <div
+      class="context-menu"
+      role="menu"
+      aria-label="Recent file actions"
+      tabindex="-1"
+      style="left: {menu.x}px; top: {menu.y}px"
+      bind:this={menuEl}
+      oncontextmenu={(e) => e.preventDefault()}
+    >
+      <button
+        type="button"
+        role="menuitem"
+        onclick={() => {
+          if (menu) remove(menu.path);
+        }}
+      >Remove from Recent</button>
+    </div>
+  {/if}
 </aside>
 
 <style>
@@ -152,5 +232,40 @@
   .footer-icon {
     display: inline-flex;
     color: var(--muted-foreground);
+  }
+
+  /* ---- recent-file context menu ---- */
+
+  .context-menu {
+    position: fixed;
+    z-index: 80;
+    min-width: 184px;
+    padding: 4px;
+    background: var(--popover);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    animation: menu-in 0.1s ease;
+  }
+
+  .context-menu button {
+    display: block;
+    width: 100%;
+    padding: 6px 10px;
+    border-radius: 5px;
+    font-size: 13px;
+    text-align: left;
+    color: var(--foreground);
+  }
+
+  .context-menu button:hover {
+    background: var(--surface-raised);
+  }
+
+  @keyframes menu-in {
+    from {
+      opacity: 0;
+      translate: 0 -4px;
+    }
   }
 </style>

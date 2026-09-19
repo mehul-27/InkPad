@@ -109,6 +109,16 @@ fn add_recent_file(app: AppHandle, path: String) {
     write_recent(&app, &paths);
 }
 
+/// Drop one entry from the recent-files list (sidebar context menu). Purely
+/// list management: the file itself is never touched, and removing the
+/// currently open document leaves it open.
+#[tauri::command]
+fn remove_recent_file(app: AppHandle, path: String) {
+    let mut paths = read_recent(&app);
+    paths.retain(|p| p != &path);
+    write_recent(&app, &paths);
+}
+
 #[tauri::command]
 fn read_text_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| format!("Could not read {path}: {e}"))
@@ -258,6 +268,7 @@ pub fn run() {
             get_welcome_file,
             get_recent_files,
             add_recent_file,
+            remove_recent_file,
             read_text_file,
             write_text_file,
             reveal_in_explorer,

@@ -25,6 +25,7 @@ export const readImageData = (path: string) =>
   invoke<{ mime: string; data: string } | null>("read_image_data", { path });
 export const getRecentFiles = () => invoke<string[]>("get_recent_files");
 export const addRecentFile = (path: string) => invoke<void>("add_recent_file", { path });
+export const removeRecentFile = (path: string) => invoke<void>("remove_recent_file", { path });
 export const revealInExplorer = (path: string) => invoke<void>("reveal_in_explorer", { path });
 export const getStartupFile = () => invoke<string | null>("get_startup_file");
 export const getWelcomeFile = () => invoke<string | null>("get_welcome_file");
