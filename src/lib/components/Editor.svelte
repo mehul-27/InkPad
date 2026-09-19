@@ -288,6 +288,11 @@
       lastWrap = get(settings).wordWrap;
       view = createView(current, lastWrap);
       applyAnchor(view, takePosition(current.id));
+      // The editor is the writing surface for every format (and the only
+      // surface for non-Markdown), so a freshly mounted document — a new
+      // document in particular — should be ready to type in. CodeMirror's
+      // focus() uses preventScroll, so the restored position is not disturbed.
+      view.focus();
       return;
     }
     const editorText = view.state.doc.toString();

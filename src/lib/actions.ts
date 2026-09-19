@@ -15,6 +15,7 @@ import {
   createUntitledDocument,
   formatById,
   isSupportedFile,
+  readerSupported,
   resolveSaveTarget,
   DEFAULT_FORMAT,
   type DocumentFormat,
@@ -44,9 +45,21 @@ function cancelAutosave(): void {
   }
 }
 
-// Formats without a reading view can never sit in reading/split mode.
-function applyFormatMode(format: DocumentFormat): void {
-  if (format.reader !== "markdown" && get(mode) !== "edit") mode.set("edit");
+// Mode for a document that is being activated (opened, or replaced): Markdown
+// opens in its rendered Reading view, every other format has a single editor
+// surface. Applied on every document activation so mode state can never be
+// stale — there is no path where a non-Markdown document sits in reading or
+// split mode.
+function setDocumentMode(format: DocumentFormat): void {
+  mode.set(readerSupported(format) ? "reading" : "edit");
+}
+
+// Save As can change a document's format in place (md -> py and back). Keep
+// the current mode when it is still valid for the new format; drop to the
+// editor when it is not. Deliberately does not force Reading, so saving does
+// not yank the user out of the editor.
+function normalizeMode(format: DocumentFormat): void {
+  if (!readerSupported(format) && get(mode) !== "edit") mode.set("edit");
 }
 
 // Editor calls this on every change: content goes into the authoritative
@@ -138,7 +151,7 @@ export async function openPath(path: string): Promise<void> {
     const next = createDocument(path, content);
     doc.set(next);
     saveState.set("saved");
-    applyFormatMode(next.format);
+    setDocumentMode(next.format);
     await addRecentFile(path);
     await refreshRecents();
   } catch (e) {
@@ -162,9 +175,10 @@ export async function openDocument(): Promise<void> {
 export async function openWelcome(path: string): Promise<void> {
   try {
     const content = await readTextFile(path);
-    doc.set(createDocument(path, content, true));
+    const next = createDocument(path, content, true);
+    doc.set(next);
     saveState.set("saved");
-    mode.set("reading");
+    setDocumentMode(next.format);
   } catch (e) {
     message(String(e), { title: "InkPad", kind: "error" });
   }
@@ -180,7 +194,10 @@ export async function requestNewDocument(): Promise<void> {
 }
 
 // Create the in-memory document chosen in the New Document dialog. No file is
-// touched: `path` stays null until the first save.
+// touched: `path` stays null until the first save. A brand-new document is
+// always something the user intends to write, so it opens in the editor —
+// including Markdown, which would otherwise start in the rendered Reading
+// view.
 export function createNewDocument(formatId: string, filename: string): void {
   const format = formatById(formatId) ?? DEFAULT_FORMAT;
   const next = createUntitledDocument(format, filename);
@@ -219,7 +236,7 @@ export async function saveDocumentAs(): Promise<void> {
     await writeTextFile(target.path, current.content);
     const next = createDocument(target.path, current.content);
     doc.set(next);
-    applyFormatMode(next.format);
+    normalizeMode(next.format);
     saveState.set("saved");
     await addRecentFile(target.path);
     await refreshRecents();
@@ -255,21 +272,17 @@ export function revealDocument(): void {
 }
 
 // ---- Phase 5/6: view / search actions for shortcuts and the palette -------
-// Phase 6 modes: reading (default), edit, split (markdown only). The
-// primary toggle (Ctrl+E) alternates reading and edit; from split it lands
-// on edit — the pane the user's cursor is already in.
+// Modes are a Markdown-only concept: Reading (rendered) and Edit (source) are
+// two representations of the same Markdown, and Split shows both. Every other
+// format has a single editor surface, so its mode commands are no-ops.
 
 export function toggleMode(): void {
   const current = get(doc);
-  if (!current) return;
-  if (current.format.reader !== "markdown") {
-    mode.set("edit"); // formats without a reader have no reading view
-    return;
-  }
+  if (!current || !readerSupported(current.format)) return;
   mode.set(get(mode) === "reading" ? "edit" : "reading");
 }
 
-// Ctrl+Shift+E: split view (markdown only). Closing split returns to the
+// Ctrl+Shift+E: split view (Markdown only). Closing split returns to the
 // reader — the primary InkPad experience.
 export function toggleSplit(): void {
   const current = get(doc);

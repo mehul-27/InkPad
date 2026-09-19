@@ -6,6 +6,7 @@
   import Overlay from "./Overlay.svelte";
   import { fuzzySort } from "../fuzzy";
   import { doc, mode, overlay, sidebarOpen, theme } from "../stores";
+  import { isMarkdown } from "../docs";
   import {
     requestNewDocument,
     openDocument,
@@ -43,7 +44,7 @@
         requiresMarkdown: true,
         run: () => navigator.clipboard.writeText($doc?.content ?? ""),
       },
-      { title: "Toggle Reading / Edit", shortcut: "Ctrl+E", requiresDoc: true, run: toggleMode },
+      { title: "Toggle Reading / Edit", shortcut: "Ctrl+E", requiresDoc: true, requiresMarkdown: true, run: toggleMode },
       {
         title: "Toggle Split View",
         shortcut: "Ctrl+Shift+E",
@@ -70,7 +71,9 @@
     ).filter(
       (c) => !c.requiresPath || $doc?.path != null,
     ).filter(
-      (c) => !c.requiresMarkdown || $doc?.format.reader === "markdown",
+      // Markdown-only commands (Reading/Edit, Split, Copy Markdown) are
+      // hidden for formats that have a single editor surface
+      (c) => !c.requiresMarkdown || ($doc != null && isMarkdown($doc.format)),
     );
   });
 

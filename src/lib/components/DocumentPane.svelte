@@ -3,15 +3,20 @@
   import Reader from "./Reader.svelte";
   import Editor from "./Editor.svelte";
   import SplitView from "./SplitView.svelte";
+  import { readerSupported } from "../docs";
 
-  // Phase 6: three modes, resolved from the format registry. Split and
-  // Reading apply only to formats whose reader is Markdown; every other
-  // format stays in the editor (spec §23) — no fake reading view.
+  // Markdown is the only format with two useful representations (rendered and
+  // source), so Reading and Split exist only where the registry says a reader
+  // does. Every other format has exactly one surface: the editor. The
+  // capabilities come from the format registry — there is no Markdown list
+  // here.
+  const canRead = $derived($doc != null && readerSupported($doc.format));
+  const canSplit = $derived($doc != null && $doc.format.splitSupported);
 </script>
 
-{#if $mode === "split" && $doc?.format.splitSupported}
+{#if canSplit && $mode === "split"}
   <SplitView />
-{:else if $mode === "reading" && $doc?.format.reader === "markdown"}
+{:else if canRead && $mode === "reading"}
   <Reader />
 {:else}
   <Editor />

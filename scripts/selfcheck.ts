@@ -20,8 +20,10 @@ import {
   defaultFilename,
   formatById,
   formatForPath,
+  isMarkdown,
   isSupportedFile,
   openDialogFilters,
+  readerSupported,
   resolveSaveTarget,
   saveDialogFilters,
 } from "../src/lib/docs.ts";
@@ -315,6 +317,18 @@ function anchorAt(scrollTop: number) {
   assert.equal(isSupportedFile("README.md"), true, "supported file");
   assert.equal(isSupportedFile("image.png"), false, "unsupported file");
   assert.equal(isSupportedFile("noextension"), false, "extensionless unsupported");
+
+  // mode capabilities: Reading/Split exist only where the registry says a
+  // reader does, and Split never exists without one
+  for (const format of DOCUMENT_FORMATS) {
+    const markdown = format.id === "markdown";
+    assert.equal(readerSupported(format), markdown, `${format.id}: reader capability`);
+    assert.equal(isMarkdown(format), markdown, `${format.id}: markdown flag`);
+    if (!markdown) assert.equal(format.splitSupported, false, `${format.id}: no split view`);
+    if (format.splitSupported) {
+      assert.equal(readerSupported(format), true, `${format.id}: split requires a reader`);
+    }
+  }
 
   // default generated filename per format
   for (const [id, name] of [

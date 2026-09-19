@@ -172,6 +172,21 @@ export function isSupportedFile(path: string): boolean {
   return formatForPath(path) !== undefined;
 }
 
+/**
+ * Whether a format has a rendered reading view. Markdown is the only format
+ * with two useful representations (source + rendered); every other format has
+ * a single editor surface. This is the capability the mode UI and mode logic
+ * use — components must not keep their own Markdown list.
+ */
+export function readerSupported(format: DocumentFormat): boolean {
+  return format.reader !== "none";
+}
+
+/** Whether a format's source is Markdown (document outline, Copy Markdown). */
+export function isMarkdown(format: DocumentFormat): boolean {
+  return format.reader === "markdown";
+}
+
 // ---- document model --------------------------------------------------------
 
 let nextDocumentId = 1;

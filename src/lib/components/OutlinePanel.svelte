@@ -8,9 +8,10 @@
   import Overlay from "./Overlay.svelte";
   import { extractHeadings, type MarkdownHeading } from "../markdown";
   import { doc, editorCommand, mode, overlay } from "../stores";
+  import { isMarkdown } from "../docs";
 
   const headings = $derived(
-    $doc?.format.reader === "markdown" ? extractHeadings($doc?.content ?? "") : [],
+    $doc != null && isMarkdown($doc.format) ? extractHeadings($doc.content) : [],
   );
 
   function goTo(heading: MarkdownHeading): void {

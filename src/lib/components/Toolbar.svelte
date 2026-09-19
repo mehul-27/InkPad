@@ -8,16 +8,18 @@
     closeDocument,
     revealDocument,
   } from "../actions";
+  import { readerSupported, isMarkdown } from "../docs";
 
   let menuOpen = $state(false);
   let toast = $state<string | null>(null);
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
-  // Reading/Split availability comes from the format registry, so a format
-  // without a reader (or without split support) disables them cleanly.
-  const canRead = $derived($doc?.format.reader === "markdown");
-  const canSplit = $derived($doc?.format.splitSupported === true);
-  const formatLabel = $derived($doc?.format.label ?? "This file");
+  // The mode switch is a Markdown concept — Reading and Edit are two
+  // representations of the same document. Formats with a single editor
+  // surface show no switch at all (rather than disabled buttons), which is
+  // intentional: the file is simply edited directly.
+  const canRead = $derived($doc != null && readerSupported($doc.format));
+  const canSplit = $derived($doc != null && $doc.format.splitSupported);
 
   // any overlay opening (palette, file switcher, outline) dismisses the menu
   $effect(() => {
@@ -62,27 +64,27 @@
       {/if}
     </div>
 
-    <div class="mode-switch" role="group" aria-label="View mode">
-      <button
-        type="button"
-        class:active={$mode === "reading"}
-        disabled={!canRead}
-        title={canRead ? undefined : `${formatLabel} has no reading view`}
-        onclick={() => setMode("reading")}
-      >Reading</button>
-      <button
-        type="button"
-        class:active={$mode === "edit"}
-        onclick={() => setMode("edit")}
-      >Edit</button>
-      <button
-        type="button"
-        class:active={$mode === "split"}
-        disabled={!canSplit}
-        title={canSplit ? "Split view" : `${formatLabel} has no split view`}
-        onclick={() => setMode("split")}
-      >Split</button>
-    </div>
+    {#if canRead}
+      <div class="mode-switch" role="group" aria-label="View mode">
+        <button
+          type="button"
+          class:active={$mode === "reading"}
+          onclick={() => setMode("reading")}
+        >Reading</button>
+        <button
+          type="button"
+          class:active={$mode === "edit"}
+          onclick={() => setMode("edit")}
+        >Edit</button>
+        {#if canSplit}
+          <button
+            type="button"
+            class:active={$mode === "split"}
+            onclick={() => setMode("split")}
+          >Split</button>
+        {/if}
+      </div>
+    {/if}
 
     <button
       class="icon-btn"
@@ -106,7 +108,7 @@
         <div class="menu-label">File</div>
         <button type="button" role="menuitem" onclick={() => { void requestNewDocument(); menuOpen = false; }}>New</button>
         {#if $doc}
-          {#if $doc.format.id === "markdown"}
+          {#if isMarkdown($doc.format)}
             <button type="button" role="menuitem" onclick={() => { copyMarkdown(); menuOpen = false; }}>Copy Markdown</button>
           {/if}
           <button type="button" role="menuitem" onclick={() => { void saveDocument(); menuOpen = false; }}>Save</button>
@@ -214,11 +216,6 @@
     background: var(--surface-raised);
     color: var(--foreground);
     font-weight: 500;
-  }
-
-  .mode-switch button:disabled {
-    opacity: 0.45;
-    cursor: default;
   }
 
   .menu-backdrop {
