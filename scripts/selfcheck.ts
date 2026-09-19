@@ -15,6 +15,16 @@ import {
   VIEWPORT_ANCHOR_FRACTION,
   type BlockInfo,
 } from "../src/lib/position.ts";
+import {
+  DOCUMENT_FORMATS,
+  defaultFilename,
+  formatById,
+  formatForPath,
+  isSupportedFile,
+  openDialogFilters,
+  resolveSaveTarget,
+  saveDialogFilters,
+} from "../src/lib/docs.ts";
 
 // ---- fuzzy ----
 
@@ -249,6 +259,134 @@ function anchorAt(scrollTop: number) {
   rememberPosition("C:\\a.md", a);
   assert.deepEqual(takePosition("C:\\a.md"), a, "anchor keyed by path");
   assert.equal(takePosition("C:\\other.md"), null, "unknown path has no anchor");
+}
+
+// ---- centralized format registry ------------------------------------------
+// Every supported extension maps to exactly one format, unsupported files are
+// rejected, and the native dialog filters / default names / save-path
+// resolution all derive from that single source.
+
+{
+  // no extension is claimed by two formats
+  const seen = new Map<string, string>();
+  for (const format of DOCUMENT_FORMATS) {
+    assert.ok(format.extensions.length > 0, `${format.id} has an extension`);
+    for (const ext of format.extensions) {
+      assert.ok(!seen.has(ext), `extension "${ext}" is claimed once`);
+      seen.set(ext, format.id);
+    }
+  }
+
+  const cases: Array<[string, string | undefined]> = [
+    ["notes.md", "markdown"],
+    ["A.MARKDOWN", "markdown"],
+    ["readme.txt", "plaintext"],
+    ["app.log", "log"],
+    ["setup.ini", "ini"],
+    [".env", "ini"],
+    ["data.json", "json"],
+    ["config.yaml", "yaml"],
+    ["config.yml", "yaml"],
+    ["cargo.toml", "toml"],
+    ["feed.xml", "xml"],
+    ["rows.csv", "csv"],
+    ["index.html", "html"],
+    ["legacy.htm", "html"],
+    ["styles.css", "css"],
+    ["app.jsx", "javascript"],
+    ["module.mjs", "javascript"],
+    ["types.ts", "typescript"],
+    ["view.tsx", "typescript"],
+    ["script.py", "python"],
+    ["main.cpp", "cpp"],
+    ["lib.h", "cpp"],
+    ["Main.java", "java"],
+    ["lib.rs", "rust"],
+    ["main.go", "go"],
+    ["query.sql", "sql"],
+    ["photo.png", undefined],
+    ["archive.zip", undefined],
+    ["noextension", undefined],
+  ];
+  for (const [path, id] of cases) {
+    assert.equal(formatForPath(path)?.id, id, `format of ${path}`);
+  }
+
+  assert.equal(isSupportedFile("README.md"), true, "supported file");
+  assert.equal(isSupportedFile("image.png"), false, "unsupported file");
+  assert.equal(isSupportedFile("noextension"), false, "extensionless unsupported");
+
+  // default generated filename per format
+  for (const [id, name] of [
+    ["markdown", "Untitled.md"],
+    ["plaintext", "Untitled.txt"],
+    ["python", "Untitled.py"],
+    ["json", "Untitled.json"],
+    ["html", "Untitled.html"],
+  ] as const) {
+    assert.equal(defaultFilename(formatById(id)!), name, `default name for ${id}`);
+  }
+}
+
+// ---- save-target resolution (extension is the source of truth) -------------
+
+{
+  const markdown = formatById("markdown")!;
+  const python = formatById("python")!;
+  const json = formatById("json")!;
+
+  // recognised extension: format follows the file, path is untouched
+  assert.deepEqual(
+    resolveSaveTarget("C:\\notes.json", markdown),
+    { path: "C:\\notes.json", format: json },
+    "extension overrides the originating format",
+  );
+  // no extension: appended from the document's format, never doubled
+  assert.deepEqual(resolveSaveTarget("C:\\script", python), { path: "C:\\script.py", format: python });
+  assert.deepEqual(resolveSaveTarget("C:\\notes", markdown), { path: "C:\\notes.md", format: markdown });
+  assert.deepEqual(resolveSaveTarget("C:\\notes.py", python), { path: "C:\\notes.py", format: python });
+  assert.deepEqual(resolveSaveTarget("C:\\trailing.", markdown), { path: "C:\\trailing.md", format: markdown });
+  // unknown extension is refused rather than saved with a misleading type
+  assert.equal(resolveSaveTarget("C:\\notes.xyz", python), null, "unknown extension rejected");
+  assert.equal(resolveSaveTarget("   ", python), null, "blank path rejected");
+}
+
+// ---- dialog filters come from the registry --------------------------------
+
+{
+  const filters = openDialogFilters();
+  assert.equal(filters[0].name, "All Supported Files", "all-supported first");
+  assert.equal(filters[filters.length - 1].name, "All Files", "all-files last");
+  const python = filters.find((f) => f.name === "Python");
+  assert.deepEqual(python?.extensions, ["py"], "Python filter group");
+  const data = filters.find((f) => f.name === "Data");
+  assert.ok(data?.extensions.includes("json") && data?.extensions.includes("yaml"), "Data filter group");
+
+  // save dialog: the document's own format is the default filter (so the
+  // native "Save as type" dropdown shows it and the default extension is
+  // right), and All Supported Files is still offered
+  const yamlSave = saveDialogFilters(formatById("yaml")!);
+  assert.equal(yamlSave[0].name, "YAML", "save defaults to the document's format");
+  assert.deepEqual(
+    yamlSave[0].extensions,
+    formatById("yaml")!.extensions,
+    "save default filter is the format's own extensions",
+  );
+  assert.equal(yamlSave[0].extensions[0], "yaml", "save default extension follows the format");
+  assert.ok(yamlSave.some((f) => f.name === "All Supported Files"), "all-supported still offered");
+  assert.equal(yamlSave[yamlSave.length - 1].name, "All Files", "save all-files last");
+  assert.equal(savedDefault(saveDialogFilters(formatById("python")!)), "py", "python save default extension");
+  assert.equal(savedDefault(saveDialogFilters(formatById("markdown")!)), "md", "markdown save default extension");
+
+  // no duplicate filter entries (a single-format group must not repeat it)
+  for (const id of ["markdown", "python", "ini", "json", "plaintext"]) {
+    const names = saveDialogFilters(formatById(id)!).map((f) => f.name);
+    assert.equal(new Set(names).size, names.length, `save filter names unique for ${id}`);
+  }
+
+  function savedDefault(list: ReturnType<typeof saveDialogFilters>): string {
+    return list[0].extensions[0];
+  }
 }
 
 console.log("selfcheck ok");

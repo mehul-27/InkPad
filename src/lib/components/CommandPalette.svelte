@@ -7,8 +7,9 @@
   import { fuzzySort } from "../fuzzy";
   import { doc, mode, overlay, sidebarOpen, theme } from "../stores";
   import {
+    requestNewDocument,
     openDocument,
-    flushSave,
+    saveDocument,
     saveDocumentAs,
     closeDocument,
     revealDocument,
@@ -23,17 +24,19 @@
     title: string;
     shortcut?: string;
     requiresDoc?: boolean;
+    requiresPath?: boolean;
     requiresMarkdown?: boolean;
     run: () => void;
   }
 
   const commands = $derived.by((): Command[] => {
     const list: Command[] = [
+      { title: "New Document", shortcut: "Ctrl+N", run: () => void requestNewDocument() },
       { title: "Open File...", shortcut: "Ctrl+O", run: () => void openDocument() },
-      { title: "Save", shortcut: "Ctrl+S", requiresDoc: true, run: () => void flushSave() },
+      { title: "Save", shortcut: "Ctrl+S", requiresDoc: true, run: () => void saveDocument() },
       { title: "Save As...", shortcut: "Ctrl+Shift+S", requiresDoc: true, run: () => void saveDocumentAs() },
       { title: "Close Document", requiresDoc: true, run: () => void closeDocument() },
-      { title: "Reveal in Explorer", requiresDoc: true, run: revealDocument },
+      { title: "Reveal in Explorer", requiresDoc: true, requiresPath: true, run: revealDocument },
       {
         title: "Copy Markdown",
         requiresDoc: true,
@@ -65,7 +68,9 @@
     return list.filter(
       (c) => !c.requiresDoc || $doc != null,
     ).filter(
-      (c) => !c.requiresMarkdown || $doc?.language === "markdown",
+      (c) => !c.requiresPath || $doc?.path != null,
+    ).filter(
+      (c) => !c.requiresMarkdown || $doc?.format.reader === "markdown",
     );
   });
 

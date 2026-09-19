@@ -9,13 +9,14 @@
   import { EditorView, keymap, lineNumbers, drawSelection } from "@codemirror/view";
   import { onDestroy } from "svelte";
   import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-  import { markdown } from "@codemirror/lang-markdown";
   import { search, searchKeymap, openSearchPanel, SearchQuery } from "@codemirror/search";
   import { ViewPlugin, ViewUpdate } from "@codemirror/view";
   import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
   import { tags as t } from "@lezer/highlight";
   import { doc, editorCommand } from "../stores";
   import { markDocumentDirty } from "../actions";
+  import { editorLanguageExtension } from "../languages";
+  import type { Document } from "../docs";
   import { get } from "svelte/store";
   import { settings } from "../settings";
   import {
@@ -167,7 +168,7 @@
 
   let view: EditorView | undefined;
   let container: HTMLDivElement;
-  let viewPath: string | undefined;
+  let viewKey: string | undefined;
   let applyingExternal = false;
   let lastWrap = true;
   // Scroll requested before CodeMirror's first measure: applied from the
@@ -216,8 +217,8 @@
     return crlf > lf ? "\r\n" : undefined;
   }
 
-  function createView(current: { path: string; content: string; language: string }, wordWrap: boolean): EditorView {
-    const languageExt = current.language === "markdown" ? markdown() : [];
+  function createView(current: Document, wordWrap: boolean): EditorView {
+    const languageExt = editorLanguageExtension(current.format.editorLanguage);
     const separator = lineSeparatorFor(current.content);
     const view = new EditorView({
       parent: container,
@@ -281,12 +282,12 @@
   $effect(() => {
     const current = $doc;
     if (!current) return;
-    if (!view || viewPath !== current.path) {
+    if (!view || viewKey !== current.id) {
       if (view) view.destroy();
-      viewPath = current.path;
+      viewKey = current.id;
       lastWrap = get(settings).wordWrap;
       view = createView(current, lastWrap);
-      applyAnchor(view, takePosition(current.path));
+      applyAnchor(view, takePosition(current.id));
       return;
     }
     const editorText = view.state.doc.toString();
@@ -306,14 +307,14 @@
   let scrollRaf = 0;
   $effect(() => {
     const v = view;
-    const path = $doc?.path;
-    if (!v || !path) return;
+    const key = $doc?.id;
+    if (!v || !key) return;
     const scroller = v.scrollDOM;
     const onScroll = () => {
       if (scrollRaf) return;
       scrollRaf = requestAnimationFrame(() => {
         scrollRaf = 0;
-        if (scroller.isConnected && !pendingScroll) rememberPosition(path, captureAnchor(v));
+        if (scroller.isConnected && !pendingScroll) rememberPosition(key, captureAnchor(v));
       });
     };
     scroller.addEventListener("scroll", onScroll, { passive: true });
@@ -330,7 +331,7 @@
   $effect(() => {
     const wantWrap = $settings.wordWrap;
     const current = $doc;
-    if (!current || !view || viewPath !== current.path || wantWrap === lastWrap) return;
+    if (!current || !view || viewKey !== current.id || wantWrap === lastWrap) return;
     lastWrap = wantWrap;
     const anchor = captureAnchor(view);
     view.destroy();

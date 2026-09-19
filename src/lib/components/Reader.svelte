@@ -106,9 +106,9 @@
     if (scrollRaf) return;
     scrollRaf = requestAnimationFrame(() => {
       scrollRaf = 0;
-      const path = $doc?.path;
+      const key = $doc?.id;
       const anchor = captureLive();
-      if (path && anchor) rememberPosition(path, anchor);
+      if (key && anchor) rememberPosition(key, anchor);
     });
   }
 
@@ -118,14 +118,14 @@
   // line lands back at that anchor.
   let preserved: PositionAnchor | null = null;
   let restored = false;
-  let lastPath: string | null = null;
+  let lastKey: string | null = null;
 
-  // watch document switches: when the path changes the pane should restore
+  // watch document switches: when the document changes the pane should restore
   // that document's remembered anchor instead of preserving the old DOM's
   $effect(() => {
-    const path = $doc?.path ?? null;
-    if (path !== lastPath) {
-      lastPath = path;
+    const key = $doc?.id ?? null;
+    if (key !== lastKey) {
+      lastKey = key;
       restored = false;
       preserved = null;
     }
@@ -142,17 +142,17 @@
     if (!pane || !$doc) return;
     if (!restored) {
       restored = true;
-      applyAnchor(takePosition($doc.path));
+      applyAnchor(takePosition($doc.id));
       // make the map reflect the restored position immediately
       const anchor = captureLive();
-      if (anchor) rememberPosition($doc.path, anchor);
+      if (anchor) rememberPosition($doc.id, anchor);
       return;
     }
     if (preserved) {
       applyAnchor(preserved);
       preserved = null;
       const anchor = captureLive();
-      if (anchor) rememberPosition($doc.path, anchor);
+      if (anchor) rememberPosition($doc.id, anchor);
     }
   });
 
@@ -161,9 +161,9 @@
     const el = pane;
     if (!el) return;
     el.addEventListener("scroll", onScroll, { passive: true });
-    const path = $doc?.path;
+    const key = $doc?.id;
     const anchor = captureLive();
-    if (path && anchor) rememberPosition(path, anchor);
+    if (key && anchor) rememberPosition(key, anchor);
     return () => {
       el.removeEventListener("scroll", onScroll);
       if (scrollRaf) cancelAnimationFrame(scrollRaf);
@@ -180,7 +180,9 @@
   }
 
   async function absolutePath(src: string): Promise<string | null> {
-    const dir = $doc?.path ? await dirname($doc.path) : null;
+    const path = $doc?.path;
+    if (!path) return null;
+    const dir = await dirname(path);
     if (!dir) return null;
     const rel = decode(src);
     if (/^[a-zA-Z]:[\\/]/.test(rel)) return rel;

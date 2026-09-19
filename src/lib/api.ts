@@ -3,19 +3,18 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-
-const FILTERS = [
-  { name: "Markdown", extensions: ["md", "markdown"] },
-  { name: "Text", extensions: ["txt"] },
-];
+import { openDialogFilters, saveDialogFilters, type DocumentFormat } from "./docs";
 
 export async function pickFileToOpen(): Promise<string | null> {
-  const picked = await openDialog({ multiple: false, filters: FILTERS });
+  const picked = await openDialog({ multiple: false, filters: openDialogFilters() });
   return typeof picked === "string" ? picked : null;
 }
 
-export async function pickFileToSave(defaultPath?: string): Promise<string | null> {
-  const picked = await saveDialog({ defaultPath, filters: FILTERS });
+export async function pickFileToSave(
+  defaultPath: string | undefined,
+  format: DocumentFormat,
+): Promise<string | null> {
+  const picked = await saveDialog({ defaultPath, filters: saveDialogFilters(format) });
   return typeof picked === "string" ? picked : null;
 }
 

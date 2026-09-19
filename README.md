@@ -29,6 +29,8 @@ Contributions, fixes, and improvements are welcome.
 
 - **Markdown Reader** — polished, readable rendering of Markdown documents
 - **Markdown Editor** — CodeMirror 6 editing with syntax highlighting
+- **Multi-format editor** — plain text, data/config, web, and programming files open in the editor with the right syntax highlighting
+- **New Document** — Ctrl+N creates an unsaved document and lets you pick its format (Markdown, Python, JSON, …)
 - **Code block copying** — one-click copy for code blocks in the reader
 - **Copy Markdown** — copy the full document source from the command palette
 - **Tables** and **task lists** — rendered in the reader
@@ -38,7 +40,7 @@ Contributions, fixes, and improvements are welcome.
 - **Search and replace** — in the editor (Ctrl+F / Ctrl+H)
 - **Autosave** — documents are saved automatically
 - **Recent files** — quick access to recently opened documents
-- **Windows file associations** — open `.md` and `.txt` files with InkPad
+- **Windows file associations** — open Markdown, text, data, web, and programming files with InkPad
 - **Drag and drop** — drop a file onto the window to open it
 - **Reading / Edit modes** — Ctrl+E toggles between rendered reading and editing
 - **Split View** — editor and reader side by side (Ctrl+Shift+E)
@@ -58,7 +60,7 @@ Contributions, fixes, and improvements are welcome.
 
 Download the latest Windows installer from
 [GitHub Releases](https://github.com/mehul-27/InkPad/releases)
-(`InkPad_1.0.0_x64-setup.exe` or `InkPad_1.0.0_x64_en-US.msi`).
+(`InkPad_1.1.0_x64-setup.exe` or `InkPad_1.1.0_x64_en-US.msi`).
 
 ### PowerShell
 
@@ -108,6 +110,7 @@ npm run build        # build the frontend bundle (vite build)
 | `Ctrl+Shift+F` | Toggle Distraction-Free Mode |
 | `Ctrl+K` | Command Palette |
 | `Ctrl+P` | Quick File Switcher |
+| `Ctrl+N` | New Document |
 | `Ctrl+O` | Open File |
 | `Ctrl+S` / `Ctrl+Shift+S` | Save / Save As |
 | `Ctrl+Shift+O` | Document Outline |

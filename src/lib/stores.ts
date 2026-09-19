@@ -44,7 +44,7 @@ export const distractionFree = writable(false);
 
 // Which overlay is open (Phase 5). Setting a new kind replaces the current
 // overlay; setting the same kind keeps it open. Esc closes it.
-export type Overlay = "palette" | "files" | "outline" | "settings";
+export type Overlay = "palette" | "files" | "outline" | "settings" | "new";
 export const overlay = writable<Overlay | null>(null);
 
 // One-shot commands addressed to the editor from outside (keyboard

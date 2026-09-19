@@ -8,6 +8,7 @@
   import FileSwitcher from "./lib/components/FileSwitcher.svelte";
   import OutlinePanel from "./lib/components/OutlinePanel.svelte";
   import Settings from "./lib/components/Settings.svelte";
+  import NewDocument from "./lib/components/NewDocument.svelte";
   import {
     doc,
     dropActive,
@@ -26,7 +27,10 @@
     openDocument,
     refreshRecents,
     flushSave,
+    requestNewDocument,
+    saveDocument,
     saveDocumentAs,
+    confirmWindowClose,
     toggleMode,
     toggleSplit,
     toggleDistractionFree,
@@ -95,7 +99,10 @@
       if (e.altKey || !(e.ctrlKey || e.metaKey)) return;
       const k = e.key.toLowerCase();
 
-      if (k === "k") {
+      if (k === "n") {
+        e.preventDefault();
+        void requestNewDocument();
+      } else if (k === "k") {
         e.preventDefault();
         overlay.set("palette");
       } else if (k === "p") {
@@ -110,7 +117,7 @@
       } else if (k === "s") {
         e.preventDefault();
         if (e.shiftKey) void saveDocumentAs();
-        else void flushSave();
+        else void saveDocument();
       } else if (k === "e" && e.shiftKey) {
         e.preventDefault();
         toggleSplit();
@@ -148,11 +155,10 @@
       .onCloseRequested(async (event) => {
         if (!get(doc)?.dirty) return; // nothing pending, close normally
         event.preventDefault();
-        await flushSave();
-        if (!get(doc)?.dirty) {
+        if (await confirmWindowClose()) {
           await getCurrentWindow().destroy();
         }
-        // save failed: keep the window open so the error dialog is visible
+        // save failed or the user kept their changes: keep the window open
       })
       .then((un) => cleanups.push(un));
 
@@ -187,6 +193,8 @@
     <OutlinePanel />
   {:else if $overlay === "settings"}
     <Settings />
+  {:else if $overlay === "new"}
+    <NewDocument />
   {/if}
 </div>
 

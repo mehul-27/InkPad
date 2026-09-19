@@ -4,14 +4,14 @@
   import Editor from "./Editor.svelte";
   import SplitView from "./SplitView.svelte";
 
-  // Phase 6: three modes. Split (markdown only) shows the same Editor and
-  // Reader panes over the single authoritative `doc` store. Plain-text
-  // documents always use the editor (spec §23) — no split, no Reader.
+  // Phase 6: three modes, resolved from the format registry. Split and
+  // Reading apply only to formats whose reader is Markdown; every other
+  // format stays in the editor (spec §23) — no fake reading view.
 </script>
 
-{#if $mode === "split" && $doc?.language === "markdown"}
+{#if $mode === "split" && $doc?.format.splitSupported}
   <SplitView />
-{:else if $mode === "reading" && $doc?.language === "markdown"}
+{:else if $mode === "reading" && $doc?.format.reader === "markdown"}
   <Reader />
 {:else}
   <Editor />

@@ -10,7 +10,7 @@
   import { doc, editorCommand, mode, overlay } from "../stores";
 
   const headings = $derived(
-    $doc?.language === "markdown" ? extractHeadings($doc?.content ?? "") : [],
+    $doc?.format.reader === "markdown" ? extractHeadings($doc?.content ?? "") : [],
   );
 
   function goTo(heading: MarkdownHeading): void {

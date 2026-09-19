@@ -1,11 +1,23 @@
 <script lang="ts">
   import { get } from "svelte/store";
   import { mode, sidebarOpen, theme, doc, saveState, overlay } from "../stores";
-  import { flushSave, saveDocumentAs, closeDocument, revealDocument } from "../actions";
+  import {
+    requestNewDocument,
+    saveDocument,
+    saveDocumentAs,
+    closeDocument,
+    revealDocument,
+  } from "../actions";
 
   let menuOpen = $state(false);
   let toast = $state<string | null>(null);
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
+
+  // Reading/Split availability comes from the format registry, so a format
+  // without a reader (or without split support) disables them cleanly.
+  const canRead = $derived($doc?.format.reader === "markdown");
+  const canSplit = $derived($doc?.format.splitSupported === true);
+  const formatLabel = $derived($doc?.format.label ?? "This file");
 
   // any overlay opening (palette, file switcher, outline) dismisses the menu
   $effect(() => {
@@ -54,8 +66,8 @@
       <button
         type="button"
         class:active={$mode === "reading"}
-        disabled={$doc?.language !== "markdown"}
-        title={$doc?.language !== "markdown" ? "Plain text has no reading view" : undefined}
+        disabled={!canRead}
+        title={canRead ? undefined : `${formatLabel} has no reading view`}
         onclick={() => setMode("reading")}
       >Reading</button>
       <button
@@ -66,8 +78,8 @@
       <button
         type="button"
         class:active={$mode === "split"}
-        disabled={$doc?.language !== "markdown"}
-        title={$doc?.language !== "markdown" ? "Plain text has no split view" : "Split view"}
+        disabled={!canSplit}
+        title={canSplit ? "Split view" : `${formatLabel} has no split view`}
         onclick={() => setMode("split")}
       >Split</button>
     </div>
@@ -91,14 +103,17 @@
       onclick={() => (menuOpen = false)}
     ></button>
       <div class="menu" role="menu">
+        <div class="menu-label">File</div>
+        <button type="button" role="menuitem" onclick={() => { void requestNewDocument(); menuOpen = false; }}>New</button>
         {#if $doc}
-          <div class="menu-label">File</div>
-          {#if $doc.language === "markdown"}
+          {#if $doc.format.id === "markdown"}
             <button type="button" role="menuitem" onclick={() => { copyMarkdown(); menuOpen = false; }}>Copy Markdown</button>
           {/if}
-          <button type="button" role="menuitem" onclick={() => { void flushSave(); menuOpen = false; }}>Save</button>
+          <button type="button" role="menuitem" onclick={() => { void saveDocument(); menuOpen = false; }}>Save</button>
           <button type="button" role="menuitem" onclick={() => { saveDocumentAs(); menuOpen = false; }}>Save As...</button>
-          <button type="button" role="menuitem" onclick={() => { revealDocument(); menuOpen = false; }}>Reveal in Explorer</button>
+          {#if $doc.path}
+            <button type="button" role="menuitem" onclick={() => { revealDocument(); menuOpen = false; }}>Reveal in Explorer</button>
+          {/if}
           <button type="button" role="menuitem" onclick={() => { closeDocument(); menuOpen = false; }}>Close</button>
         {/if}
         <div class="menu-label">Theme</div>
