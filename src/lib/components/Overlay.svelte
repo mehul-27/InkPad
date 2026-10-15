@@ -65,8 +65,8 @@
     max-width: calc(100vw - 48px);
     background: var(--popover);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+    border-radius: var(--radius-overlay);
+    box-shadow: var(--shadow-modal);
     overflow: hidden;
   }
 

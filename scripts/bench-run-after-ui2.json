@@ -1,0 +1,87 @@
+{
+  "label": "run-after-ui2",
+  "at": "2026-10-15T08:22:24.527Z",
+  "fixtures": "C:\\Users\\mehul\\AppData\\Local\\Temp\\inkpad-bench",
+  "bundle": {
+    "entry": "index-CLThuFj9.js",
+    "startupChunks": [
+      "codemirror-BFj_KVuX.js",
+      "index-CLThuFj9.js",
+      "markdown-C_mZSJ3N.js"
+    ],
+    "deferredChunks": [
+      "highlight-B8kdA4xo.js",
+      "index-0PHDo73a.js",
+      "index-2IfGMthn.js",
+      "index-Bz4HfBOT.js",
+      "index-CKM3i_G4.js",
+      "index-CehtYu7_.js",
+      "index-DDCL4sJb.js",
+      "index-DECUmYMO.js",
+      "index-DW5MLO_y.js",
+      "index-DifEiCCK.js",
+      "index-Ds7w5pR7.js",
+      "index-E-_8oNuR.js",
+      "index-jyvNyty8.js",
+      "index-wEJOiMLU.js",
+      "index-zOYwlyfB.js"
+    ],
+    "totalJsBytes": 1290891,
+    "totalJsGzip": 467179,
+    "startupJsBytes": 560364,
+    "startupJsGzip": 195245,
+    "deferredJsBytes": 730527,
+    "deferredJsGzip": 271934,
+    "startupParseMs": 1.89,
+    "totalParseMs": 0
+  },
+  "markdown": {
+    "64kb": {
+      "sourceKb": 64.5,
+      "htmlKb": 201.6,
+      "renderMs": 0,
+      "extractHeadingsMs": 18.42,
+      "keystrokesWithoutDebounceMs": 0.1,
+      "keystrokesWithDebounceMs": 0.01
+    },
+    "256kb": {
+      "sourceKb": 256.9,
+      "htmlKb": 798.9,
+      "renderMs": 0,
+      "extractHeadingsMs": 52.69,
+      "keystrokesWithoutDebounceMs": 0.04,
+      "keystrokesWithDebounceMs": 0
+    },
+    "1mb": {
+      "sourceKb": 1026.1,
+      "htmlKb": 3184.9,
+      "renderMs": 0,
+      "extractHeadingsMs": 208.45,
+      "keystrokesWithoutDebounceMs": 0.06,
+      "keystrokesWithDebounceMs": 0.01
+    }
+  },
+  "blockRanges": {
+    "64kb": {
+      "blocks": 1908,
+      "containsCalls": 2755,
+      "legacyMs": 0.712,
+      "attributeMs": 0.606,
+      "rangesAgree": false
+    },
+    "256kb": {
+      "blocks": 7488,
+      "containsCalls": 10815,
+      "legacyMs": 0.1,
+      "attributeMs": 1.177,
+      "rangesAgree": false
+    },
+    "1mb": {
+      "blocks": 29574,
+      "containsCalls": 42717,
+      "legacyMs": 0.515,
+      "attributeMs": 6.652,
+      "rangesAgree": false
+    }
+  }
+}

@@ -163,19 +163,24 @@
   .segmented {
     display: flex;
     padding: 2px;
-    border-radius: 7px;
+    border-radius: var(--radius-lg);
     background: var(--surface);
     border: 1px solid var(--hairline);
   }
 
   .segmented button {
     padding: 3px 11px;
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     font-size: 12px;
     color: var(--muted-foreground);
   }
 
   .segmented button:hover {
+    color: var(--foreground);
+  }
+
+  .segmented button:active {
+    background: var(--accent-soft);
     color: var(--foreground);
   }
 

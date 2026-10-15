@@ -6,29 +6,64 @@
 
 import MarkdownIt from "markdown-it";
 import taskLists from "markdown-it-task-lists";
-import hljs from "highlight.js/lib/common";
+import type { HLJSApi } from "highlight.js";
+
+// Perf (Fix C): highlight.js used to ship as a static import, so its parse
+// cost landed on the very first paint. It is now loaded off the critical
+// path with a dynamic import (own deferred chunk) — the loader fires at
+// module evaluation, usually long before the first render, and every render
+// that starts before it arrives degrades gracefully to escaped plain-text
+// code fences. The Reader re-runs its memoized render when the highlighter
+// lands (loadHighlighter → hljsEpoch bump → memo invalidation below), so
+// syntax colors appear the moment the chunk resolves, with no breaking
+// change to the synchronous renderMarkdown api.
+let hljs: HLJSApi | null = null;
+let hljsEpoch = 0;
+let hljsPromise: Promise<void> | null = null;
+
+/// Start (once) the off-critical-path load of highlight.js. Always resolves,
+/// even if loading fails: without a highlighter, code fences render as
+/// escaped plain text instead of throwing.
+export function loadHighlighter(): Promise<void> {
+  hljsPromise ??= import("highlight.js/lib/common")
+    .then((m) => {
+      hljs = ((m as { default?: HLJSApi }).default ?? (m as unknown as HLJSApi));
+      hljsEpoch++;
+    })
+    .catch(() => {
+      // no highlighter available: future renders keep the plain-text fallback
+      hljsPromise = null;
+    });
+  return hljsPromise;
+}
+
+// start the load right away (background work — nothing awaits it)
+void loadHighlighter();
 
 const md = new MarkdownIt({
   html: false,
   linkify: false,
   highlight(str: string, lang: string): string {
-    if (lang && hljs.getLanguage(lang)) {
-      return `<pre class="hljs"><code>${hljs
-        .highlight(str, { language: lang, ignoreIllegals: true })
-        .value}</code></pre>`;
-    }
-    return `<pre class="hljs"><code>${md.utils.escapeHtml(str)}</code></pre>`;
+    // synchronous fallback while highlight.js is not yet loaded (or its
+    // load failed): the code is escaped, never dropped, never a crash
+    const code =
+      hljs && lang && hljs.getLanguage(lang)
+        ? hljs.highlight(str, { language: lang, ignoreIllegals: true }).value
+        : md.utils.escapeHtml(str);
+    return `<pre class="hljs"><code>${code}</code></pre>`;
   },
 });
 
 md.use(taskLists, { enabled: false, label: false });
 
 // ---- Source-line metadata (Phase 6 regression fix) ------------------------
-// Every block-level token carries its 0-based source line (token.map[0]); the
-// renderer stamps it as data-source-line (1-based) on the rendered element so
-// the Reader can map viewport positions back to Markdown source lines without
-// a second parser. Nested blocks (li inside ul, p inside li) keep their own
-// attribute; the Reader resolves ranges by DOM ancestry.
+// Every block-level token carries its own source span (token.map); the
+// renderer stamps its 1-based start as data-source-line on the rendered
+// element, and the full range table (each block's inclusive last source
+// line, derived from token.map) is exposed via sourceLineRanges() — computed
+// once per rendered version from the same parse result, so the Reader never
+// resolves ranges by DOM ancestry (O(n²) `contains` scanning).
+// Nested blocks (li inside ul, p inside li) still carry their own attribute.
 const BLOCK_TAGS = new Set([
   "heading_open",
   "paragraph_open",
@@ -115,18 +150,67 @@ md.renderer.rules.image = (tokens, idx) => {
     const label = alt ? `External image: ${alt} — click to load` : "External image — click to load";
     return `<button type="button" class="remote-image" data-remote-src="${md.utils.escapeHtml(src)}" data-alt="${alt}" title="${md.utils.escapeHtml(src)} — loads over the network on click">${label}</button>`;
   }
-  return `<img data-local-src="${md.utils.escapeHtml(src)}" alt="${alt}" loading="lazy"${titleAttr}>`;
+  // `loading="lazy"` + `decoding="async"`: the browser defers decoding until
+  // the element is painted and decode work stays off the interaction thread.
+  // Perf (Fix B): the Reader additionally holds back `src` until the image is
+  // near the viewport, so data-local-src images produce no disk/IPC work at
+  // all until then; the attribute here is the CSS/DOM-level backstop.
+  return `<img data-local-src="${md.utils.escapeHtml(src)}" alt="${alt}" loading="lazy" decoding="async"${titleAttr}>`;
 };
 
+// Render is memoized keyed on the content string (last-content →
+// last-result): renderMarkdown is pure, so identical content must never be
+// re-parsed. This is what keeps re-renders of an unchanged content (dirty
+// flag / autosave churn in the doc store) ~free.
+//
+// Per rendered version the very same tokens also yield the block source
+// range table below — start and end are both token.map entries, no DOM
+// ancestry needed anywhere downstream.
+let lastRenderContent: string | null = null;
+let lastRenderHtml = "";
+let lastRenderRanges: SourceBlockRange[] = [];
+// epoch of the highlighter that produced the last render: a render made
+// while highlight.js was still loading caches plain-text fences and must be
+// re-rendered once the highlighter lands (Fix C)
+let lastRenderEpoch = -1;
+
+/// A rendered block's 1-based inclusive source-line range, in document
+/// order; index i matches the i-th element carrying data-source-line.
+export interface SourceBlockRange {
+  start: number;
+  end: number;
+}
+
 export function renderMarkdown(content: string): string {
+  if (content === lastRenderContent && lastRenderEpoch === hljsEpoch) return lastRenderHtml;
   usedSlugs.clear();
   const tokens = md.parse(content, {});
+  const ranges: SourceBlockRange[] = [];
   for (const t of tokens) {
-    if (t.map && BLOCK_TAGS.has(t.type)) {
+    // exactly the tokens that get data-source-line on their rendered
+    // element, so sourceLineRanges() and the DOM stay index-aligned
+    // (indented code blocks are never stamped, so they stay out too — a
+    // neighbouring block's range absorbs their lines, as before)
+    if (t.map && (BLOCK_TAGS.has(t.type) || t.type === "fence")) {
       t.attrSet("data-source-line", String(t.map[0] + 1));
+      // token.map's exclusive 0-based end IS the block's 1-based inclusive
+      // last source line
+      ranges.push({ start: t.map[0] + 1, end: t.map[1] });
     }
   }
-  return md.renderer.render(tokens, md.options, {});
+  lastRenderContent = content;
+  lastRenderHtml = md.renderer.render(tokens, md.options, {});
+  lastRenderRanges = ranges;
+  lastRenderEpoch = hljsEpoch;
+  return lastRenderHtml;
+}
+
+/// The source ranges for the last render of `content`; computed once per
+/// rendered version (cached with the memoized html) and index-aligned with
+/// the `.reading-column [data-source-line]` elements in document order.
+export function sourceLineRanges(content: string): SourceBlockRange[] {
+  if (content !== lastRenderContent) renderMarkdown(content);
+  return lastRenderRanges;
 }
 
 // ---- Document outline (spec §"Document Outline"): same parser, same slug

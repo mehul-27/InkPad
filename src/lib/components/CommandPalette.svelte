@@ -183,7 +183,7 @@
     gap: 16px;
     width: 100%;
     padding: 7px 12px;
-    border-radius: 6px;
+    border-radius: var(--radius-md);
     font-size: 13px;
     text-align: left;
     color: var(--foreground);
@@ -191,6 +191,10 @@
 
   .item.selected {
     background: var(--surface-raised);
+  }
+
+  .item:active {
+    color: var(--accent);
   }
 
   .item.selected .title {
@@ -202,7 +206,7 @@
     font-size: 11.5px;
     color: var(--muted-foreground);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-xs);
     padding: 1px 6px;
   }
 

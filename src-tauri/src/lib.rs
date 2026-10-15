@@ -124,6 +124,18 @@ fn read_text_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| format!("Could not read {path}: {e}"))
 }
 
+/// Cheap metadata-only mtime check for the frontend content cache (Fix D):
+/// a re-open of a previously read file validates against this instead of
+/// re-reading the whole document. Returns milliseconds since the Unix epoch,
+/// or None when the metadata is unavailable (e.g. the file was deleted —
+/// the read itself will surface the proper error).
+#[tauri::command]
+fn file_modified(path: String) -> Option<i64> {
+    let modified = fs::metadata(path).ok()?.modified().ok()?;
+    let since_epoch = modified.duration_since(std::time::UNIX_EPOCH).ok()?;
+    Some(i64::try_from(since_epoch.as_millis()).unwrap_or(i64::MAX))
+}
+
 #[tauri::command]
 fn write_text_file(path: String, content: String) -> Result<(), String> {
     // Atomic write (spec §26): write a sibling temp file, then rename over
@@ -271,6 +283,7 @@ pub fn run() {
             remove_recent_file,
             read_text_file,
             write_text_file,
+            file_modified,
             reveal_in_explorer,
             read_image_data
         ])

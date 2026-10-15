@@ -38,17 +38,26 @@
   .logo {
     display: block;
     opacity: 0.9;
+    transition: opacity var(--transition-fast), transform var(--transition-fast);
+  }
+
+  .empty-state:hover .logo {
+    opacity: 1;
   }
 
   .tagline {
-    margin: 0 0 44px;
+    margin: 0 0 48px;
     font-size: 15px;
     line-height: 1.6;
+    text-wrap: balance;
     color: var(--muted-foreground);
   }
 
   .drop-hint {
     margin: 0;
+    padding: 8px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-lg);
     font-size: 13px;
     color: var(--muted-foreground);
   }
@@ -61,14 +70,23 @@
 
   .open-btn {
     padding: 7px 20px;
-    border-radius: 7px;
+    border-radius: var(--radius-lg);
     font-size: 13px;
     font-weight: 500;
     color: var(--accent-foreground);
     background: var(--accent);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
   }
 
   .open-btn:hover {
     opacity: 0.92;
+    transform: translateY(-1px);
+  }
+
+  .open-btn:active {
+    /* solid accent: keep the fill on press, lift feedback via opacity only */
+    background: var(--accent);
+    opacity: 0.82;
+    transform: translateY(0);
   }
 </style>

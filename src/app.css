@@ -55,10 +55,10 @@
   color-scheme: light;
 
   /* Surfaces — warm paper, not a dark-theme inversion */
-  --background: #f7f4ee;
-  --surface: #efece4;
-  --surface-raised: #e9e5db;
-  --popover: #ffffff;
+  --background: #f1ede4;
+  --surface: #e9e5d9;
+  --surface-raised: #e2ddd0;
+  --popover: #fbfaf5;
 
   /* Text */
   --foreground: #26231d;
@@ -99,6 +99,43 @@
 }
 
 /* ============================================================
+   Shared scales — constant across themes. Components consume
+   these instead of repeating literals, so radii, shadows and
+   micro-interaction timing stay consistent everywhere.
+   ============================================================ */
+
+:root {
+  /* radius scale: xs chips/kbd, sm menu+code rows, md items/inputs,
+     lg buttons/segments, xl panels+images, overlay dialogs */
+  --radius-xs: 4px;
+  --radius-sm: 5px;
+  --radius-md: 6px;
+  --radius-lg: 7px;
+  --radius-xl: 8px;
+  --radius-overlay: 10px;
+
+  /* elevation: popovers (menus, toast) and centered dialogs */
+  --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.4);
+
+  /* micro-interaction timing: hover/press feedback only */
+  --transition-fast: 130ms ease;
+
+  /* focus-dim (Ulysses-style): chrome fades to 0.65 opacity while the
+     editor has the focus; opacity-only, restored instantly on mouse move */
+  --transition-dim: 160ms ease;
+
+  /* Reader prose: warm variable serif — body serif; code stays JetBrains Mono,
+     UI chrome stays IBM Plex Sans. Constant across themes, next to fonts. */
+  --font-prose: "Newsreader Variable", Georgia, "Times New Roman", serif;
+
+  /* Interface font — everything outside Reader prose (and inside it:
+     code-copy chips and other little chrome buttons re-apply it) */
+  --font-ui: "IBM Plex Sans Variable", "IBM Plex Sans", -apple-system,
+    "Segoe UI", sans-serif;
+}
+
+/* ============================================================
    Base
    ============================================================ */
 
@@ -116,8 +153,7 @@ body {
 }
 
 body {
-  font-family: "IBM Plex Sans Variable", "IBM Plex Sans", -apple-system,
-    "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
   color: var(--foreground);
   background: var(--background);
@@ -128,12 +164,25 @@ body {
 
 button {
   font: inherit;
+  /* Chrome inside the serif Reading column (code-copy, remote-image chips)
+     stays in the interface font: `font: inherit` would otherwise pull the
+     serif down from the prose column */
+  font-family: var(--font-ui);
   color: inherit;
   background: none;
   border: none;
   padding: 0;
   cursor: pointer;
-  transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease;
+  transition: background-color var(--transition-fast),
+    color var(--transition-fast), border-color var(--transition-fast),
+    opacity var(--transition-fast), transform var(--transition-fast);
+}
+
+/* touch feedback, shared by every interactive control: a brief accent wash
+   on press (no layout change). :where() keeps this at the base specificity
+   so a component's own :active / solid-accent button styles win. */
+button:active:where(:not(:disabled)) {
+  background-color: var(--accent-soft);
 }
 
 /* accessible focus rings for the whole app — subtle, not neon */

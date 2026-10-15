@@ -4,8 +4,14 @@
   // schedules the debounced autosave), and external content changes flow
   // back into the editor. The editor is rebuilt per document (fresh undo
   // history, detected line endings).
-
-  import { EditorState } from "@codemirror/state";
+  //
+  // Perf (Fix D): a fresh view is created ONLY when the document changes.
+  // Reading ↔ Edit ↔ Split keep this component mounted (DocumentPane merely
+  // toggles pane visibility through the `visible` prop), so the mode switch
+  // no longer rebuilds the EditorState — the doc, selection, scroll and undo
+  // history all survive. On a mode change the shared viewport anchor is
+  // re-adopted from the position map, exactly what the old fresh mount did.
+  import { Compartment, EditorState } from "@codemirror/state";
   import { EditorView, keymap, lineNumbers, drawSelection } from "@codemirror/view";
   import { onDestroy } from "svelte";
   import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
@@ -13,9 +19,10 @@
   import { ViewPlugin, ViewUpdate } from "@codemirror/view";
   import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
   import { tags as t } from "@lezer/highlight";
-  import { doc, editorCommand } from "../stores";
+  import { doc, editorCommand, mode, type Mode } from "../stores";
   import { markDocumentDirty } from "../actions";
-  import { editorLanguageExtension } from "../languages";
+  import { armFocusDim } from "../focusDim";
+  import { languageFor } from "../languages";
   import type { Document } from "../docs";
   import { get } from "svelte/store";
   import { settings } from "../settings";
@@ -27,6 +34,11 @@
   } from "../position";
 
   // ---- syntax palette: restrained, mapped to theme tokens --------------
+
+  // Fix D: visibility of the hosting pane. DocumentPane keeps this component
+  // mounted across mode switches and only toggles the pane's display:none;
+  // the view, its scroll offset and selection live on untouched.
+  let { visible = true }: { visible?: boolean } = $props();
 
   const syntaxStyle = HighlightStyle.define([
     { tag: t.heading, color: "var(--prose-heading)", fontWeight: "650" },
@@ -168,6 +180,14 @@
 
   let view: EditorView | undefined;
   let container: HTMLDivElement;
+  // Perf (Fix C): the document language loads on demand and attaches via this
+  // compartment (see createView). One token is shared by every view: a
+  // reconfigure reaches the live view it belongs to.
+  const languageCompartment = new Compartment();
+  // Perf (Fix D): word wrap is swapped through this compartment instead of
+  // destroying and recreating the view — state (doc, selection, undo history)
+  // survives the Settings toggle exactly as a mode switch keeps it now.
+  const wrapCompartment = new Compartment();
   let viewKey: string | undefined;
   let applyingExternal = false;
   let lastWrap = true;
@@ -218,9 +238,8 @@
   }
 
   function createView(current: Document, wordWrap: boolean): EditorView {
-    const languageExt = editorLanguageExtension(current.format.editorLanguage);
     const separator = lineSeparatorFor(current.content);
-    const view = new EditorView({
+    const created = new EditorView({
       parent: container,
       state: EditorState.create({
         doc: current.content,
@@ -232,7 +251,15 @@
           drawSelection(),
           editorTheme,
           syntaxHighlighting(syntaxStyle),
-          languageExt,
+          // Perf (Fix C): language packs load on demand. The view starts
+          // with an empty language compartment — identical to the plain-text
+          // editor, zero typing lag on a cold type — and the current
+          // document's language attaches the moment its deferred chunk
+          // resolves (prewarmed from document activation, usually ready
+          // before the first keystroke). A failed pack load resolves to a
+          // plain-text extension, so the editor can never crash on it.
+          languageCompartment.of([]),
+          wrapCompartment.of(wordWrap ? EditorView.lineWrapping : []),
           search({ top: true }),
           matchCounter,
           keymap.of([
@@ -247,6 +274,11 @@
           ]),
           EditorView.updateListener.of((u) => {
             if (u.geometryChanged && pendingScroll) {
+              // a deferred anchor restore only runs while the pane is shown:
+              // a display:none scroller cannot take a scroll offset, so the
+              // pending anchor is kept until the pane becomes visible and
+              // CodeMirror measures again (see the show-restore effect below)
+              if (!visible) return;
               // first measure complete: line heights and viewport size are
               // real, so the anchor line can be placed at the viewport
               // fraction (25% from the top) with exact geometry
@@ -266,19 +298,33 @@
             }
             if (u.docChanged && !applyingExternal) {
               markDocumentDirty(u.state.doc.toString());
+              // focus dim: a real keystroke re-engages the chrome fade (it is
+              // latched off by mouse movement); no state work while the dim
+              // store is already true and the mouse is untouched
+              armFocusDim();
             }
           }),
           EditorView.contentAttributes.of({ spellcheck: "false" }),
         ],
       }),
     });
-    return view;
+    // attach the document's language when its dynamic chunk resolves; skip
+    // if the document switched or the view was rebuilt meanwhile (the fresh
+    // view starts its own load)
+    const docId = current.id;
+    void languageFor(current.format.editorLanguage).then((ext) => {
+      if (view !== created || viewKey !== docId) return;
+      view.dispatch({ effects: languageCompartment.reconfigure(ext) });
+    });
+    return created;
   }
 
   // Recreate per document (fresh history + line endings); otherwise mirror
   // authoritative store content into the editor when it changes externally.
   // Positions are remembered continuously (scroll) and restored when a
-  // previously visited path mounts again.
+  // previously visited path mounts again. Fix D: mode switches no longer
+  // reach this effect at all — the view persists and only its pane's
+  // visibility changes.
   $effect(() => {
     const current = $doc;
     if (!current) return;
@@ -287,6 +333,9 @@
       viewKey = current.id;
       lastWrap = get(settings).wordWrap;
       view = createView(current, lastWrap);
+      // a fresh document invalidates any exact scroll offset saved for the
+      // previous one (see the show-restore effect)
+      savedScrollTop = null;
       applyAnchor(view, takePosition(current.id));
       // The editor is the writing surface for every format (and the only
       // surface for non-Markdown), so a freshly mounted document — a new
@@ -319,7 +368,10 @@
       if (scrollRaf) return;
       scrollRaf = requestAnimationFrame(() => {
         scrollRaf = 0;
-        if (scroller.isConnected && !pendingScroll) rememberPosition(key, captureAnchor(v));
+        // a hidden pane (Fix D) reports no live geometry — capturing would
+        // stamp a bogus anchor; the rAF may fire across a just-toggled hide
+        if (!visible || !scroller.isConnected || pendingScroll) return;
+        rememberPosition(key, captureAnchor(v));
       });
     };
     scroller.addEventListener("scroll", onScroll, { passive: true });
@@ -330,18 +382,87 @@
     };
   });
 
-  // Word wrap (Settings) is a view-level extension choice: applying it live
-  // recreates the editor, preserving scroll and cursor via the same anchor
-  // mechanism. Font size needs no rebuild — it is a CSS variable.
+  // Word wrap (Settings) is a view-level extension choice. Fix D: it is
+  // swapped through a Compartment instead of rebuilding the EditorState — the
+  // doc, selection and undo history survive — and the logical viewport anchor
+  // is re-applied afterwards, the same restore the old rebuild performed.
+  // Font size needs no rebuild — it is a CSS variable.
   $effect(() => {
     const wantWrap = $settings.wordWrap;
     const current = $doc;
     if (!current || !view || viewKey !== current.id || wantWrap === lastWrap) return;
     lastWrap = wantWrap;
     const anchor = captureAnchor(view);
-    view.destroy();
-    view = createView(current, wantWrap);
+    view.dispatch({
+      effects: wrapCompartment.reconfigure(wantWrap ? EditorView.lineWrapping : []),
+    });
     applyAnchor(view, anchor);
+    view.requestMeasure();
+  });
+
+  // ---- Fix D: persistence across mode switches ------------------------------
+  // DocumentPane keeps this component mounted for every mode and toggles the
+  // pane's display:none. CodeMirror cannot size or scroll inside a hidden
+  // pane, so:
+  //   - hiding snapshots the exact scroll offset (pre-DOM, geometry still
+  //     real) and showing restores it byte-for-byte when no anchor is pending;
+  //   - every mode change re-adopts the shared viewport anchor (the Reader's
+  //     hand-off), exactly what the old pass-through remount did — with the
+  //     pending-anchor mechanism placing the line at the 25% viewport anchor
+  //     once CodeMirror measures the real layout.
+
+  // Exact scroll offset of the current document while its pane is hidden.
+  // Cleared on document switches (a fresh doc restores through the anchor).
+  let savedScrollTop: number | null = null;
+
+  $effect.pre(() => {
+    if (!visible) {
+      // snapshot while the pane still has real geometry: pre effects run
+      // before Svelte applies the display:none class
+      if (view) savedScrollTop = view.scrollDOM.scrollTop;
+      return;
+    }
+  });
+
+  $effect(() => {
+    if (!visible) return;
+    const v = view;
+    if (!v) return;
+    // a preserved offset only exists when the pane was hidden with no anchor
+    // pending (a pending anchor wins — it is the more recent intent)
+    if (pendingScroll === null && savedScrollTop !== null) {
+      v.scrollDOM.scrollTop = savedScrollTop;
+    }
+    savedScrollTop = null;
+    // nudge CodeMirror to re-measure the newly shown pane: its viewport went
+    // 0-size while hidden, and the measure step applies any pending anchor
+    // (both effects above use it) through the updateListener
+    v.requestMeasure();
+  });
+
+  // Mode change: re-adopt the shared anchor (fresh-mount parity). Skipped
+  // when the document changed in the same flush — the document-switch effect
+  // above owns that restore.
+  let prevAdoptDoc: string | null = null;
+  let prevAdoptMode: Mode | null = null;
+  $effect(() => {
+    const m = $mode;
+    const id = $doc?.id ?? null;
+    const docChanged = prevAdoptDoc !== id;
+    const modeChanged = prevAdoptMode !== null && prevAdoptMode !== m;
+    prevAdoptDoc = id;
+    prevAdoptMode = m;
+    if (docChanged || modeChanged === false) return;
+    const v = view;
+    if (!v || id === null || viewKey !== id) return;
+    // while the pane is hidden the anchor is kept pending (see the
+    // updateListener guard) and applies on the next show + measure
+    applyAnchor(v, takePosition(id));
+    v.requestMeasure();
+    // a fresh mount always focused the editor when it appeared in a mode
+    // where it is visible; display:none focus attempts are no-ops, so this
+    // stays inert while the pane is hidden
+    if (visible) v.focus();
   });
 
   // Consume one-shot editor commands (search/replace from Ctrl+F/Ctrl+H
@@ -376,9 +497,11 @@
     });
     view.focus();
   });
-  // Unmount (mode switch away, document close): the editor must be fully
+  // Unmount (document close / empty state): the editor must be fully
   // destroyed, otherwise the whole CM instance — DOM, syntax tree, and the
-  // ResizeObserver that keeps it alive — stays in memory per switch.
+  // ResizeObserver that keeps it alive — stays in memory after the last
+  // document is gone. Mode switches no longer unmount (Fix D), so this runs
+  // only when the document disappears entirely.
   onDestroy(() => {
     if (view) {
       view.destroy();

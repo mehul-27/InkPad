@@ -12,20 +12,19 @@
   import {
     doc,
     dropActive,
-    recentFiles,
     overlay,
     sidebarOpen,
     distractionFree,
   } from "./lib/stores";
+  import { focusDim, initFocusDim } from "./lib/focusDim";
   import { get } from "svelte/store";
   import { isSupportedFile } from "./lib/docs";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { getStartupFile, getWelcomeFile, onOpenFileRequest, onDragDrop } from "./lib/api";
+  import { onOpenFileRequest, onDragDrop } from "./lib/api";
   import {
+    boot,
     openPath,
-    openWelcome,
     openDocument,
-    refreshRecents,
     flushSave,
     requestNewDocument,
     saveDocument,
@@ -39,31 +38,17 @@
   } from "./lib/actions";
   import { settings } from "./lib/settings";
 
-  // Launch priority (§ onboarding): a file passed on the command line
-  // ("Open with InkPad") wins; otherwise the bundled welcome opens on the
-  // first-ever launch; otherwise the most recent document is restored when
-  // one exists; otherwise the empty state shows.
-  async function startup(): Promise<void> {
-    const startupPath = await getStartupFile();
-    if (startupPath) {
-      await openPath(startupPath);
-      return;
-    }
-    const welcomePath = await getWelcomeFile();
-    if (welcomePath) {
-      await openWelcome(welcomePath);
-      return;
-    }
-    const recents = get(recentFiles);
-    if (recents.length > 0) {
-      await openPath(recents[0]);
-    }
-  }
-
   onMount(() => {
     const cleanups: Array<() => void> = [];
 
-    refreshRecents().then(() => void startup());
+    // Focus dimming (Ulysses-style): one store bit + listeners managed in
+    // lib/focusDim.ts; torn down with the rest.
+    cleanups.push(initFocusDim());
+
+    // Perf (Fix C): boot overlaps the recents refresh, the startup-file
+    // lookup and the initial document read over parallel IPC (see actions.ts
+    // boot()) instead of running them one after another.
+    void boot();
     onOpenFileRequest((path) => openPath(path)).then((un) => cleanups.push(un));
     onDragDrop((paths, active) => {
       if (active) {
@@ -166,7 +151,7 @@
   });
 </script>
 
-<div class="app" class:df={$distractionFree}>
+<div class="app" class:df={$distractionFree} class:focus-dim={$focusDim}>
   <Sidebar />
 
   <div class="main">
@@ -223,6 +208,23 @@
   .app.df :global(.sidebar),
   .app.df :global(.toolbar) {
     display: none;
+  }
+
+  /* Focus dim (Ulysses-style): while the CodeMirror editor has the focus in
+     Edit/Split and no pointer has moved, chrome relaxes to 65% opacity.
+     Opacity only — pure compositor work, never a layout property; --transition-dim
+     (160ms) fades in while writing and fades out from the instant restore
+     (mouse move, focus loss, mode change — the class flips synchronously). */
+  .app :global(.toolbar),
+  .app :global(.sidebar),
+  .app :global(.divider) {
+    transition: opacity var(--transition-dim);
+  }
+
+  .app.focus-dim :global(.toolbar),
+  .app.focus-dim :global(.sidebar),
+  .app.focus-dim :global(.divider) {
+    opacity: 0.65;
   }
 
   .app.df .df-wrap {

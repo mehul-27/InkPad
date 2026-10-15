@@ -143,10 +143,13 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 16px 18px 14px;
+    /* same vertical rhythm as the toolbar: title row + label row sit on the
+       44px pane-header cadence */
+    padding: 13px 18px 11px;
     font-size: 15px;
     font-weight: 650;
     letter-spacing: 0.02em;
+    line-height: 1.35;
     color: var(--foreground);
   }
 
@@ -156,7 +159,7 @@
   }
 
   .section-label {
-    padding: 8px 18px 6px;
+    padding: 9px 18px 6px;
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.08em;
@@ -173,7 +176,7 @@
   .recent-item {
     position: relative;
     padding: 6px 8px 6px 12px;
-    border-radius: 6px;
+    border-radius: var(--radius-md);
     font-size: 13px;
     color: var(--muted-foreground);
     text-align: left;
@@ -184,6 +187,10 @@
 
   .recent-item:hover {
     background: var(--surface-raised);
+    color: var(--foreground);
+  }
+
+  .recent-item:active {
     color: var(--foreground);
   }
 
@@ -218,7 +225,7 @@
     align-items: center;
     gap: 9px;
     padding: 6px 8px;
-    border-radius: 6px;
+    border-radius: var(--radius-md);
     font-size: 13px;
     color: var(--muted-foreground);
     text-align: left;
@@ -226,6 +233,10 @@
 
   .footer-item:hover {
     background: var(--surface-raised);
+    color: var(--foreground);
+  }
+
+  .footer-item:active {
     color: var(--foreground);
   }
 
@@ -243,8 +254,8 @@
     padding: 4px;
     background: var(--popover);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-pop);
     animation: menu-in 0.1s ease;
   }
 
@@ -252,7 +263,7 @@
     display: block;
     width: 100%;
     padding: 6px 10px;
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     font-size: 13px;
     text-align: left;
     color: var(--foreground);

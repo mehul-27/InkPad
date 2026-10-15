@@ -74,7 +74,7 @@
     padding: 5px 10px;
     margin: 1px 0;
     padding-left: calc(10px + var(--level-indent));
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     font-size: 12.5px;
     font-weight: 450;
     text-align: left;
@@ -87,6 +87,11 @@
   .item:hover {
     background: var(--surface-raised);
     color: var(--accent);
+  }
+
+  .item:active {
+    color: var(--accent);
+    background: var(--accent-soft);
   }
 
   .empty {

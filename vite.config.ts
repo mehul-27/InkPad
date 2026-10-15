@@ -32,5 +32,37 @@ export default defineConfig({
   // 4. tauri expects a fixed output dir
   build: {
     outDir: "dist",
+    // Perf (Fix C): keep the bundle in small, cacheable chunks instead of
+    // one monolithic ~1.2MB index chunk. highlight.js and the
+    // @codemirror/lang-* packs are already deferred through dynamic
+    // imports (languages.ts / markdown.ts) and must stay out of the
+    // startup graph; markdown-it and the CodeMirror core are loaded at
+    // first paint and get their own files for parsing/caching clarity.
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          const path = id.replace(/\\/g, "/");
+          if (!path.includes("/node_modules/")) return undefined;
+          if (path.includes("/highlight.js/")) return "highlight";
+          if (
+            path.includes("/markdown-it") ||
+            path.includes("/mdurl") ||
+            path.includes("/linkify-it") ||
+            path.includes("/entities/") ||
+            path.includes("/uc.micro") ||
+            path.includes("/decode-uri-component") ||
+            path.includes("/punycode")
+          ) {
+            return "markdown";
+          }
+          // the codemirror language packs must NOT land here: they are
+          // dynamically imported and would become part of the startup graph
+          if (path.includes("/@codemirror/") && !path.includes("/@codemirror/lang-")) {
+            return "codemirror";
+          }
+          return undefined;
+        },
+      },
+    },
   },
 });

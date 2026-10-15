@@ -182,13 +182,28 @@
     justify-content: center;
     width: 28px;
     height: 28px;
-    border-radius: 6px;
+    border-radius: var(--radius-md);
     color: var(--muted-foreground);
   }
 
   .icon-btn:hover {
     background: var(--surface-raised);
     color: var(--foreground);
+    transform: scale(1.04);
+  }
+
+  .icon-btn:active {
+    transform: scale(0.94);
+  }
+
+  /* invisible full-screen click-catcher — must never take the shared
+     button press-wash or a background transition */
+  .menu-backdrop {
+    background: none;
+  }
+
+  .menu-backdrop:active {
+    background: none;
   }
 
   .save-state {
@@ -200,16 +215,25 @@
   .mode-switch {
     display: flex;
     padding: 2px;
-    border-radius: 7px;
+    border-radius: var(--radius-lg);
     background: var(--surface);
     border: 1px solid var(--hairline);
   }
 
   .mode-switch button {
     padding: 3px 12px;
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     font-size: 12px;
     color: var(--muted-foreground);
+  }
+
+  .mode-switch button:hover {
+    color: var(--foreground);
+  }
+
+  .mode-switch button:active {
+    color: var(--foreground);
+    background: var(--accent-soft);
   }
 
   .mode-switch button.active {
@@ -233,8 +257,8 @@
     padding: 6px;
     background: var(--popover);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-pop);
     animation: menu-in 0.1s ease;
   }
 
@@ -258,7 +282,7 @@
     display: block;
     width: 100%;
     padding: 6px 10px;
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     font-size: 13px;
     text-align: left;
     color: var(--foreground);
@@ -266,6 +290,10 @@
 
   .menu button:hover {
     background: var(--surface-raised);
+  }
+
+  .menu button:active {
+    color: var(--accent);
   }
 
   .menu button.selected::after {
@@ -281,12 +309,12 @@
     transform: translateX(-50%);
     z-index: 60;
     padding: 7px 14px;
-    border-radius: 7px;
+    border-radius: var(--radius-lg);
     background: var(--popover);
     border: 1px solid var(--border);
     font-size: 12.5px;
     color: var(--foreground);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--shadow-pop);
     animation: toast-in 0.12s ease;
   }
 

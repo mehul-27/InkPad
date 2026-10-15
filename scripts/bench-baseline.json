@@ -1,0 +1,69 @@
+{
+  "label": "baseline",
+  "at": "2026-10-14T19:13:40.625Z",
+  "fixtures": "C:\\Users\\mehul\\AppData\\Local\\Temp\\inkpad-bench",
+  "bundle": {
+    "entry": "index-DlS0aFir.js",
+    "startupChunks": [
+      "index-DlS0aFir.js"
+    ],
+    "deferredChunks": [],
+    "totalJsBytes": 1258054,
+    "totalJsGzip": 450581,
+    "startupJsBytes": 1258054,
+    "startupJsGzip": 450581,
+    "deferredJsBytes": 0,
+    "deferredJsGzip": 0,
+    "startupParseMs": 0.01,
+    "totalParseMs": 0
+  },
+  "markdown": {
+    "64kb": {
+      "sourceKb": 64.5,
+      "htmlKb": 201.6,
+      "renderMs": 33.73,
+      "extractHeadingsMs": 13.5,
+      "keystrokesWithoutDebounceMs": 2023.8,
+      "keystrokesWithDebounceMs": 202.38
+    },
+    "256kb": {
+      "sourceKb": 256.9,
+      "htmlKb": 798.9,
+      "renderMs": 102.44,
+      "extractHeadingsMs": 48.09,
+      "keystrokesWithoutDebounceMs": 6146.63,
+      "keystrokesWithDebounceMs": 614.66
+    },
+    "1mb": {
+      "sourceKb": 1026.1,
+      "htmlKb": 3184.9,
+      "renderMs": 380.54,
+      "extractHeadingsMs": 227.67,
+      "keystrokesWithoutDebounceMs": 22832.69,
+      "keystrokesWithDebounceMs": 2283.27
+    }
+  },
+  "blockRanges": {
+    "64kb": {
+      "blocks": 1908,
+      "containsCalls": 2755,
+      "legacyMs": 0.526,
+      "attributeMs": 0.756,
+      "rangesAgree": false
+    },
+    "256kb": {
+      "blocks": 7488,
+      "containsCalls": 10815,
+      "legacyMs": 0.137,
+      "attributeMs": 1.204,
+      "rangesAgree": false
+    },
+    "1mb": {
+      "blocks": 29574,
+      "containsCalls": 42717,
+      "legacyMs": 0.56,
+      "attributeMs": 6.081,
+      "rangesAgree": false
+    }
+  }
+}

@@ -25,14 +25,18 @@ import {
   pickFileToSave,
   readTextFile,
   writeTextFile,
+  fileModified,
   getRecentFiles,
   addRecentFile,
   removeRecentFile,
   revealInExplorer,
+  getStartupFile,
+  getWelcomeFile,
 } from "./api";
 import { doc, mode, recentFiles, saveState, editorCommand, overlay, distractionFree } from "./stores";
 import type { EditorCommand } from "./stores";
 import { settings } from "./settings";
+import { prewarmEditorLanguage } from "./languages";
 
 export const AUTOSAVE_DELAY = 750;
 
@@ -52,6 +56,10 @@ function cancelAutosave(): void {
 // split mode.
 function setDocumentMode(format: DocumentFormat): void {
   mode.set(readerSupported(format) ? "reading" : "edit");
+  // Perf (Fix C): prewarm the editor language of the document being opened
+  // so the first edit never waits on the deferred language chunk (the
+  // editor's plain-text-no-syntax start has zero typing lag regardless).
+  prewarmEditorLanguage(format.editorLanguage);
 }
 
 // Save As can change a document's format in place (md -> py and back). Keep
@@ -60,6 +68,69 @@ function setDocumentMode(format: DocumentFormat): void {
 // not yank the user out of the editor.
 function normalizeMode(format: DocumentFormat): void {
   if (!readerSupported(format) && get(mode) !== "edit") mode.set("edit");
+}
+
+// ---- Perf (Fix D): content cache -------------------------------------------
+// Re-opening a document re-read the file over IPC every time, even when the
+// frontend had just read or written the exact same bytes. A small bounded
+// path → content cache now sits in front of the IPC read:
+//   - entry = { content, mtime } (millis since epoch);
+//   - a hit validates with ONE metadata-only IPC (file_modified) before the
+//     content is served, so a file modified outside InkPad (between close
+//     and re-open) is never served stale;
+//   - every read fills the cache, and every write by the app (autosave,
+//     Save, Save As) replaces its entry — never more than CONTENT_CACHE_SIZE
+//     documents are kept.
+const CONTENT_CACHE_SIZE = 6;
+
+interface ContentCacheEntry {
+  content: string;
+  mtime: number;
+}
+
+const contentCache = new Map<string, ContentCacheEntry>();
+
+function cachePut(path: string, entry: ContentCacheEntry): void {
+  contentCache.delete(path); // refresh insertion order (LRU)
+  contentCache.set(path, entry);
+  while (contentCache.size > CONTENT_CACHE_SIZE) {
+    const oldest = contentCache.keys().next().value;
+    if (oldest === undefined) break;
+    contentCache.delete(oldest);
+  }
+}
+
+/// Content of `path`, served from the cache when the file's modified time
+/// still matches the cached one; otherwise a full IPC read (cached again).
+async function readFileCached(path: string): Promise<string> {
+  const entry = contentCache.get(path);
+  if (entry) {
+    const mtime = await fileModified(path);
+    if (mtime !== null && mtime === entry.mtime) {
+      cachePut(path, entry); // refresh insertion order
+      return entry.content;
+    }
+    contentCache.delete(path);
+  }
+  // stat first, read second: an external write between the two leaves the
+  // stored mtime older than the disk file, so the NEXT validation fails and
+  // the fresh content is re-used — the stale window closes immediately
+  const storedMtime = await fileModified(path);
+  const content = await readTextFile(path);
+  if (storedMtime !== null) cachePut(path, { content, mtime: storedMtime });
+  return content;
+}
+
+/// Write + cache refresh: after the bytes are on disk the entry is replaced
+/// with the written content (mtime re-read) so re-opens keep hitting.
+async function writeFileCached(path: string, content: string): Promise<void> {
+  await writeTextFile(path, content);
+  const mtime = await fileModified(path);
+  if (mtime === null) {
+    contentCache.delete(path);
+  } else {
+    cachePut(path, { content, mtime });
+  }
 }
 
 // Editor calls this on every change: content goes into the authoritative
@@ -93,7 +164,7 @@ export async function flushSave(): Promise<void> {
   }
   saveState.set("saving");
   try {
-    await writeTextFile(current.path, current.content);
+    await writeFileCached(current.path, current.content);
     doc.update((d) => (d ? { ...d, dirty: false } : d));
     saveState.set("saved");
   } catch (e) {
@@ -128,6 +199,68 @@ export async function refreshRecents(): Promise<void> {
   recentFiles.set(await getRecentFiles());
 }
 
+// ---- Perf (Fix C): parallel boot -------------------------------------------
+// Boot used to serialize three IPC round-trips: refreshRecents →
+// getStartupFile → the initial document read. They now overlap: the recents
+// refresh (IPC 1) and the startup-file lookup (IPC 2) run concurrently, and
+// the first content read (IPC 3) fires the moment its path is known — while
+// the other two may still be in flight.
+//
+// The final state is the same as the sequential boot produced: the startup
+// file opens (else the bundled welcome, else the most recent file), and the
+// recents list ends up containing the opened document. To guarantee that the
+// initial recents snapshot can never land after the document has been added
+// to the history, the snapshot is awaited between the content read and the
+// add-to-recents step — the post-open refresh is then the last write.
+
+/// Open the boot document. Same result as openPath at startup (where save
+/// flush / dirty-discard confirmations are guaranteed no-ops), but the read
+/// overlaps the still-running initial recents refresh instead of queueing
+/// behind it.
+export async function openStartupDocument(
+  path: string,
+  recentsReady: Promise<void>,
+): Promise<void> {
+  if (!isSupportedFile(path)) return;
+  try {
+    const content = await readFileCached(path);
+    // the initial snapshot must land before this document is added to the
+    // recents list, so it can never overwrite the post-open refresh
+    await recentsReady;
+    const next = createDocument(path, content);
+    doc.set(next);
+    saveState.set("saved");
+    setDocumentMode(next.format);
+    await addRecentFile(path);
+    await refreshRecents();
+  } catch (e) {
+    message(String(e), { title: "InkPad", kind: "error" });
+  }
+}
+
+// Launch priority (§ onboarding), now with overlapped IPC: a file passed on
+// the command line ("Open with InkPad") wins; otherwise the bundled welcome
+// opens on the first-ever launch; otherwise the most recent document is
+// restored when one exists; otherwise the empty state shows.
+export async function boot(): Promise<void> {
+  const recentsReady = refreshRecents(); // IPC 1 (not awaited yet)
+  const startupPath = await getStartupFile(); // IPC 2 — runs during IPC 1
+  if (startupPath) {
+    await openStartupDocument(startupPath, recentsReady); // read overlaps IPC 1
+    return;
+  }
+  await recentsReady;
+  const welcomePath = await getWelcomeFile();
+  if (welcomePath) {
+    await openWelcome(welcomePath);
+    return;
+  }
+  const recents = get(recentFiles);
+  if (recents.length > 0) {
+    await openStartupDocument(recents[0], recentsReady);
+  }
+}
+
 // Remove one entry from the recent-files list (sidebar context menu). The
 // file on disk is untouched and an open document stays open — only the
 // history entry goes away.
@@ -146,8 +279,24 @@ export async function openPath(path: string): Promise<void> {
   // which case the discard prompt below decides what happens to the edits
   if (get(settings).autosave) await flushSave();
   if (!(await confirmDiscardIfDirty())) return;
+  // Perf (Fix D): re-opening the document that is already open must not
+  // re-read. After the flush above the in-memory content is exactly what is
+  // on disk (and an unsaved-but-kept document would have bailed out at the
+  // discard prompt), so re-read from memory instead of the file. The
+  // resulting store state is identical to what the disk read produced:
+  // a fresh Document id, non-dirty, mode re-applied, recents refreshed.
+  const open = get(doc);
+  if (open && open.path === path && !open.dirty) {
+    const next = createDocument(path, open.content);
+    doc.set(next);
+    saveState.set("saved");
+    setDocumentMode(next.format);
+    await addRecentFile(path);
+    await refreshRecents();
+    return;
+  }
   try {
-    const content = await readTextFile(path);
+    const content = await readFileCached(path);
     const next = createDocument(path, content);
     doc.set(next);
     saveState.set("saved");
@@ -174,7 +323,7 @@ export async function openDocument(): Promise<void> {
 // recent-files list (§ onboarding).
 export async function openWelcome(path: string): Promise<void> {
   try {
-    const content = await readTextFile(path);
+    const content = await readFileCached(path);
     const next = createDocument(path, content, true);
     doc.set(next);
     saveState.set("saved");
@@ -233,7 +382,7 @@ export async function saveDocumentAs(): Promise<void> {
   try {
     // write the new path first — the document identity only changes once
     // the bytes are safely on disk
-    await writeTextFile(target.path, current.content);
+    await writeFileCached(target.path, current.content);
     const next = createDocument(target.path, current.content);
     doc.set(next);
     normalizeMode(next.format);

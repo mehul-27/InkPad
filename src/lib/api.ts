@@ -21,6 +21,10 @@ export async function pickFileToSave(
 export const readTextFile = (path: string) => invoke<string>("read_text_file", { path });
 export const writeTextFile = (path: string, content: string) =>
   invoke<void>("write_text_file", { path, content });
+// Cheap mtime check (metadata only, no content) — the Fix D content cache
+// validates cached reads against it. Null when the metadata is unavailable.
+export const fileModified = (path: string) =>
+  invoke<number | null>("file_modified", { path });
 export const readImageData = (path: string) =>
   invoke<{ mime: string; data: string } | null>("read_image_data", { path });
 export const getRecentFiles = () => invoke<string[]>("get_recent_files");

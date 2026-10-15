@@ -152,10 +152,11 @@
     background: var(--background);
     color: var(--foreground);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-md);
     font: inherit;
     font-size: 13px;
     outline: none;
+    transition: border-color var(--transition-fast);
   }
 
   select:focus,
@@ -172,7 +173,7 @@
 
   .btn {
     padding: 7px 16px;
-    border-radius: 7px;
+    border-radius: var(--radius-lg);
     font-size: 13px;
     color: var(--foreground);
     background: var(--surface-raised);
@@ -181,6 +182,11 @@
 
   .btn:hover {
     background: var(--popover);
+    border-color: var(--border-strong);
+  }
+
+  .btn:active {
+    color: var(--accent);
   }
 
   .btn.primary {
@@ -191,6 +197,11 @@
 
   .btn.primary:hover {
     opacity: 0.92;
+  }
+
+  .btn.primary:active {
+    opacity: 0.82;
+    background: var(--accent);
   }
 
   .btn:disabled {
